@@ -1,0 +1,259 @@
+---
+title: "Cold stunned marine turtles"
+output: html_notebook
+---
+
+This document describes statistical analyses of cold stunned marine turtle data from Heather Harris. First load data and see what they look like.
+
+```{r}
+library(tidyverse)
+
+dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv", 
+                 header = TRUE) %>%
+  select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
+  mutate(Age = as.factor(toupper(Age)),
+         Sex = as.factor(toupper(Sex)),
+         Condition = as.factor(toupper(Condition))) %>%
+  mutate(Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
+                          ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
+         Body_Temp_C = Confirmed.body.temp.C,
+         Year = Year_Initially_Observed,
+         Month = Month_Initially_Observed,
+         Day = Day_Initially_Observed,
+         Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
+  select(Age, State, Latitude, Longitude, Sex, Weight_kg, CCL_cm, CCW_cm,
+         Body_Temp_C, Date, Species)
+
+summary(dat0)
+```
+
+After tweaking data a bit, now we have somewhat cleaned up data. First, look at the stranding locations. This should be the same plot as Figure 1 in Deena's report.
+
+```{r, warning=FALSE, cache=TRUE}
+
+water.color <- "lightblue"
+land.color <- "darkgray"
+border.color <- "gray20"
+
+E.end <- -112
+W.end <- -128
+N.end <- 51
+S.end <- 30
+# coast line data are from here: http://openstreetmapdata.com/data/coastlines or
+# https://shoreline.noaa.gov/data/datasheets/medres.html and
+# http://datapages.com/gis-map-publishing-program/gis-open-files/global-framework/global-heat-flow-database/shapefiles-list
+# https://www12.statcan.gc.ca/census-recensement/2011/geo/bound-limit/bound-limit-2016-eng.cfm
+
+# https://www.ngdc.noaa.gov/mgg/shorelines/shorelines.html f is the full resolution - too big
+# h is high resolution - should be good enough. 
+all.coast <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/gshhg-shp-2.3.7/GSHHS_shp/h",
+                                            layer = "GSHHS_h_L1",
+                                            verbose = FALSE),
+                             sp::CRS("+proj=longlat +datum=WGS84"))
+
+W.coast <- raster::crop(all.coast, raster::extent(c(W.end, E.end, S.end, N.end)))
+
+W.coast.df <- broom::tidy(W.coast) 
+#   filter(long < E.end & long > W.end & lat < N.end & lat > S.end)
+
+# coast.line.df <- do.call(rbind, W.coast.df)
+# colnames(coast.line.df) <- c('X', 'Y', 'idx')
+# coast.line.Sp <- latlon2sp(coast.line.df, center.latlon)
+
+# the following shape file was obttained from here: #https://gis.stackexchange.com/questions/153514/us-mexican-border-data
+# note that the USGS link is broken but direct link "here" is available. 
+# http://txpub.usgs.gov/BEHI/Data_download/Boundaries_Layers/International_Boundary_shp.zip
+US_MX_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/International_Boundary/shp",
+                                               layer = "International_Boundary_Final",
+                                               verbose = FALSE),
+                                sp::CRS("+proj=longlat +datum=WGS84"))
+
+US_MX_border <- raster::crop(US_MX_border, raster::extent(c(W.end, E.end, 30, 35)))
+US_MX_border.df <- broom::tidy(US_MX_border)
+
+# US-Canada border was obtained from here: 
+# https://hifld-geoplatform.opendata.arcgis.com/datasets/canada-and-us-border
+US_Canada_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/Canada_and_US_Border",
+                                                  layer = "Canada_and_US_Border",
+                                                  verbose = FALSE),
+                                   sp::CRS("+proj=longlat +datum=WGS84"))
+
+US_Canada_border <- raster::crop(US_Canada_border, raster::extent(c(W.end, E.end, 47, 51)))
+US_Canada_border.df <- broom::tidy(US_Canada_border) 
+
+# state borders from here: https://www.census.gov/geo/maps-data/data/cbf/cbf_state.html
+state_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/cb_2017_us_state_500k",
+                                                   layer = "cb_2017_us_state_500k",
+                                                   verbose = FALSE),
+                                    sp::CRS("+proj=longlat +datum=WGS84"))
+
+state_border <- raster::crop(state_border, raster::extent(c(W.end, E.end, 32, 50)))
+state_border.df <- broom::tidy(state_border)
+
+p1 <- ggplot() + 
+  geom_polygon(data = data.frame(y = c(N.end, S.end, S.end, N.end, N.end),
+                                 x = c(W.end, W.end, E.end, E.end, W.end)),
+               aes(x = x, y = y),
+               fill = water.color,
+               alpha = 0.8) + 
+  geom_polygon(fill = land.color,
+               data = W.coast.df,
+               aes(x=long, y=lat, group = id),
+               alpha = 0.9) +  
+  geom_path(data = US_MX_border.df,
+            aes(x = long, y = lat, group = group),
+            color = border.color,
+            size = 0.5) + 
+  geom_path(data = US_Canada_border.df,
+            aes(x = long, y = lat, group = group),
+            color = border.color,
+            size = 0.5) + #coord_map()
+  geom_path(data = state_border.df,
+            aes(x = long, y = lat, group = group),
+            color = border.color,
+            size = 0.5) + #coord_map()
+  geom_path(data = data.frame(x = c(E.end, E.end), 
+                              y = c(S.end, N.end)),
+            aes(x = x, y = y),
+            color = land.color,
+            size = 1.2) +  
+  geom_point(data = dat0,
+             aes(x = Longitude, 
+                 y = Latitude,
+                 color = Species))  +
+  coord_map() +
+  xlim(c(-128, E.end))+
+  ylab(expression(paste("Latitude (", degree, "N)"))) +
+  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) 
+    
+p1
+```
+
+We may remove those found south of Pt Conception, as Deena did (true?). But for now, keep them all. 
+
+Look at size measurements:
+
+```{r}
+ggplot(data = dat0) +
+  geom_point(aes(x = CCL_cm, y = CCW_cm, color = Species, size = Weight_kg))
+```
+
+
+```{r}
+ggplot(data = dat0) + 
+  geom_point(aes(x = CCL_cm, y = Weight_kg, color = Species, size = CCW_cm))
+```
+
+Looks like one loggerhead has incorrect weight... CCL and CCW for that individual is identical! 
+
+```{r}
+dat0 %>% filter(Species == "CC")
+```
+
+The temperature data in the dataset are not very useful because some of them come from quite far away. We should probably get better data. Wind speed and direction prior to and at the day of stranding should be looked at. 
+
+```{r, cache=TRUE}
+library(sp)
+library(ncdf4)
+
+d.n <- 3   # this should match the number of dx's below. 
+d1 <- 1
+d2 <- 5
+d3 <- 10
+
+# Get SST for 1, 5, 10 km around each point. 
+latlon <- select(dat0, Latitude, Longitude) %>% 
+  transmute(X = Longitude, Y = Latitude,
+            BeginX_1 = NA, BeginY_1 = NA, EndX_1 = NA, EndY_1 = NA,
+            BeginX_2 = NA, BeginY_2 = NA, EndX_2 = NA, EndY_2 = NA,
+            BeginX_3 = NA, BeginY_3 = NA, EndX_3 = NA, EndY_3 = NA) 
+
+UTM <- data.frame(X = NA, Y = NA,
+                  BeginX_1 = NA, BeginY_1 = NA, EndX_1 = NA, EndY_1 = NA,
+                  BeginX_2 = NA, BeginY_2 = NA, EndX_2 = NA, EndY_2 = NA,
+                  BeginX_3 = NA, BeginY_3 = NA, EndX_3 = NA, EndY_3 = NA,
+                  zone = NA)
+
+# because the range of latitude is quite large, approximate center is moved along each data point.
+# convert all lat/lon pairs to UTM coordinates in the appropriate zone. 
+centers.UTM <- vector(mode = "list", length = nrow(latlon))
+k <- 1
+for (k in 1:nrow(dat0)){
+  approx.center <- data.frame(X = -120, Y = dat0[k, "Latitude"])
+  sp::coordinates(approx.center) <- c("X", "Y")
+  sp::proj4string(approx.center) <- CRS("+proj=longlat +datum=WGS84")
+  
+  # North of ~ Pt Conception is zone 10, and south of it is zone 11
+  zone <- ifelse(dat0[k, "Latitude"] > 34.46, 10, 11)
+  
+  centers.UTM[[k]] <- spTransform(approx.center,
+                            CRS(paste0("+proj=utm +zone=", zone, " ellps=WGS84")))
+  
+  tmp <- latlon2sp(latlon[k, c("X", "Y")], 
+                   center.UTM = centers.UTM[[k]], zone )
+  
+  UTM[k, ] <- c(tmp@data$newX, tmp@data$newY,
+                tmp@data$newX - d1, tmp@data$newY - d1, tmp@data$newX + d1, tmp@data$newY + d1,
+                tmp@data$newX - d2, tmp@data$newY - d2, tmp@data$newX + d2, tmp@data$newY + d2,
+                tmp@data$newX - d3, tmp@data$newY - d3, tmp@data$newX + d3, tmp@data$newY + d3,
+                zone)
+  
+}
+
+# This loop should go over all dx's (2 each)
+k <- k1 <- 1
+for (k in 1:(2*d.n)){
+  tmp <- data.frame(newX = UTM[, (2*k+1)],
+                    newY = UTM[, (2*k+2)])
+  for (k1 in 1:nrow(UTM)){
+    latlon[k1, (2*k+1):(2*k+2)] <- sp2latlon(tmp[k1,], 
+                                             center.UTM = centers.UTM[[k1]], 
+                                             zone = UTM[k1, "zone"])@coords[, c("X", "Y")]
+    
+  }
+  
+}
+
+latlon$Date <- dat0$Date
+
+sst <- matrix(nrow = nrow(latlon),
+              ncol = d.n)
+k <- k1 <- 1
+
+# for all rows
+for (k in 1:length(sst)){
+  # for number of distances
+  for (k1 in 1:d.n){
+      xlim <- c(latlon[k, (2*k1 + 1)],
+                latlon[k, (2*k1 + 3)])
+      ylim <- c(latlon[k, (2*k1 + 2)],
+                latlon[k, (2*k1 + 4)])
+      tlim <- c(latlon[k, "Date"] - 7,
+                latlon[k, "Date"] + 7)
+
+      # the URL below has been changed to the following as the old one doesn't exist any longer
+      # 2018-11-02
+      sstURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.htmlTable?analysed_sst%5B(", latlon[k, "Date"], 
+                       "T09:00:00Z)%5D%5B(", ylim[1], "):1:(", ylim[2], ")%5D%5B(", 
+                       xlim[1], "):1:(", ylim[2], ")%5D")
+
+      test <- download.file(sstURL,
+                            destfile= paste0("data/ncfiles/sst_", k, "_", k1, ".nc"),
+                            mode='wb')
+
+      datafileID <- nc_open(paste0("data/ncfiles/sst_", k, "_", k1, ".nc"))
+      lon <- ncvar_get(datafileID, varid="longitude")
+      lat <- ncvar_get(datafileID, varid="latitude")
+      time <- ncvar_get(datafileID, varid="time")
+      time <- as.POSIXlt(time,origin='1970-01-01',tz= "GMT")
+      sst.mat <- ncvar_get(datafileID, varid = 'SST')
+      nc_close(datafileID)
+
+      sst[k, k1] <- mean(sst.mat, na.rm = T)
+    
+  }
+}
+
+```
+https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.htmlTable?analysed_sst%5B(2002-06-01T09:00:00Z)%5D%5B(-89.99):1000:(89.99)%5D%5B(-179.99):1000:(180.0)%5D
+
