@@ -6,6 +6,8 @@ output: html_notebook
 This document describes statistical analyses of cold stunned marine turtle data from Heather Harris. First load data and see what they look like.
 
 ```{r}
+rm(list=ls())
+source("cold_stun_functions.R")
 library(tidyverse)
 
 dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv", 
@@ -152,7 +154,7 @@ dat0 %>% filter(Species == "CC")
 
 The temperature data in the dataset are not very useful because some of them come from quite far away. We should probably get better data. Wind speed and direction prior to and at the day of stranding should be looked at. 
 
-```{r, cache=TRUE}
+```{r, cache=TRUE, message=FALSE}
 library(sp)
 library(ncdf4)
 
@@ -221,19 +223,19 @@ sst <- matrix(nrow = nrow(latlon),
 k <- k1 <- 1
 
 # for all rows
-for (k in 1:length(sst)){
+for (k in 1:nrow(sst)){
   # for number of distances
   for (k1 in 1:d.n){
-      xlim <- c(latlon[k, (2*k1 + 1)],
-                latlon[k, (2*k1 + 3)])
-      ylim <- c(latlon[k, (2*k1 + 2)],
-                latlon[k, (2*k1 + 4)])
+      xlim <- c(latlon[k, (4*k1 - 1)],
+                latlon[k, (4*k1 + 1)])
+      ylim <- c(latlon[k, (4*k1)],
+                latlon[k, (4*k1 + 2)])
       tlim <- c(latlon[k, "Date"] - 7,
                 latlon[k, "Date"] + 7)
 
       # the URL below has been changed to the following as the old one doesn't exist any longer
       # 2018-11-02
-      sstURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.htmlTable?analysed_sst%5B(", latlon[k, "Date"], 
+      sstURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc?analysed_sst%5B(", latlon[k, "Date"], 
                        "T09:00:00Z)%5D%5B(", ylim[1], "):1:(", ylim[2], ")%5D%5B(", 
                        xlim[1], "):1:(", ylim[2], ")%5D")
 
@@ -246,7 +248,7 @@ for (k in 1:length(sst)){
       lat <- ncvar_get(datafileID, varid="latitude")
       time <- ncvar_get(datafileID, varid="time")
       time <- as.POSIXlt(time,origin='1970-01-01',tz= "GMT")
-      sst.mat <- ncvar_get(datafileID, varid = 'SST')
+      sst.mat <- ncvar_get(datafileID, varid = 'analysed_sst')
       nc_close(datafileID)
 
       sst[k, k1] <- mean(sst.mat, na.rm = T)
@@ -255,5 +257,27 @@ for (k in 1:length(sst)){
 }
 
 ```
-https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.htmlTable?analysed_sst%5B(2002-06-01T09:00:00Z)%5D%5B(-89.99):1000:(89.99)%5D%5B(-179.99):1000:(180.0)%5D
+
+We also need the background temperature data for the time period.
+
+
+
+Once data are downloaded, combine it with the original dataset.
+
+```{r}
+sst.df <- data.frame(sst)
+colnames(sst.df) <- c("SST_1", "SST_2", "SST_3")
+dat1 <- cbind(dat0, sst.df)
+
+ggplot(data = dat1) + 
+  geom_point(aes(x = SST_1, y = Body_Temp_C, color = Species),
+             size = 2) + 
+  xlim(c(9, 20))
+```
+
+```{r}
+ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_1, color = Species))
+```
+
 
