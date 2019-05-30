@@ -11,19 +11,22 @@ source("cold_stun_functions.R")
 library(tidyverse)
 
 dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv", 
-                 header = TRUE) %>%
+                 header = TRUE)  %>%
+  rownames_to_column() %>%
   select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
   mutate(Age = as.factor(toupper(Age)),
          Sex = as.factor(toupper(Sex)),
-         Condition = as.factor(toupper(Condition))) %>%
-  mutate(Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
-                          ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
+         Condition = as.factor(toupper(Condition)),
+         ID = rowname,
+         Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
+                                    ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
          Body_Temp_C = Confirmed.body.temp.C,
          Year = Year_Initially_Observed,
          Month = Month_Initially_Observed,
          Day = Day_Initially_Observed,
          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
-  select(Age, State, Latitude, Longitude, Sex, Weight_kg, CCL_cm, CCW_cm,
+  select(ID, Age, State, Latitude, Longitude, 
+         Sex, Weight_kg, CCL_cm, CCW_cm,
          Body_Temp_C, Date, Species)
 
 summary(dat0)
@@ -158,10 +161,12 @@ The temperature data in the dataset are not very useful because some of them com
 library(sp)
 library(ncdf4)
 
-d.n <- 3   # this should match the number of dx's below. 
-d1 <- 1
-d2 <- 5
-d3 <- 10
+# distances from each stranding within which SST data are extracted. It is measured from the 
+# center (stranding location) +/- ds (in km). So, in effect SST is extracted from 2 * ds x 2 * ds
+# area. Note they are not that different at the scale of 1 km to 10 km. 
+
+ds <- c(3, 5, 10)
+d.n <- length(ds)   # this should match the number of dx's below. 
 
 # Get SST for 1, 5, 10 km around each point. 
 latlon <- select(dat0, Latitude, Longitude) %>% 
@@ -195,19 +200,22 @@ for (k in 1:nrow(dat0)){
                    center.UTM = centers.UTM[[k]], zone )
   
   UTM[k, ] <- c(tmp@data$newX, tmp@data$newY,
-                tmp@data$newX - d1, tmp@data$newY - d1, tmp@data$newX + d1, tmp@data$newY + d1,
-                tmp@data$newX - d2, tmp@data$newY - d2, tmp@data$newX + d2, tmp@data$newY + d2,
-                tmp@data$newX - d3, tmp@data$newY - d3, tmp@data$newX + d3, tmp@data$newY + d3,
+                tmp@data$newX - ds[1], tmp@data$newY - ds[1], 
+                tmp@data$newX + ds[1], tmp@data$newY + ds[1],
+                tmp@data$newX - ds[2], tmp@data$newY - ds[2], 
+                tmp@data$newX + ds[2], tmp@data$newY + ds[2],
+                tmp@data$newX - ds[3], tmp@data$newY - ds[3], 
+                tmp@data$newX + ds[3], tmp@data$newY + ds[3],
                 zone)
   
 }
 
-# This loop should go over all dx's (2 each)
+# This loop should go over all dx's (2 each) - Begin and End (X,Y)
 k <- k1 <- 1
 for (k in 1:(2*d.n)){
   tmp <- data.frame(newX = UTM[, (2*k+1)],
                     newY = UTM[, (2*k+2)])
-  for (k1 in 1:nrow(UTM)){
+  for (k1 in 1:nrow(tmp)){
     latlon[k1, (2*k+1):(2*k+2)] <- sp2latlon(tmp[k1,], 
                                              center.UTM = centers.UTM[[k1]], 
                                              zone = UTM[k1, "zone"])@coords[, c("X", "Y")]
@@ -218,7 +226,7 @@ for (k in 1:(2*d.n)){
 
 latlon$Date <- dat0$Date
 
-sst <- matrix(nrow = nrow(latlon),
+sst <- sst_anom <- sst_sd <- sst_lag30d <- sst_anom_30d <- matrix(nrow = nrow(latlon),
               ncol = d.n)
 k <- k1 <- 1
 
@@ -226,33 +234,123 @@ k <- k1 <- 1
 for (k in 1:nrow(sst)){
   # for number of distances
   for (k1 in 1:d.n){
-      xlim <- c(latlon[k, (4*k1 - 1)],
-                latlon[k, (4*k1 + 1)])
-      ylim <- c(latlon[k, (4*k1)],
-                latlon[k, (4*k1 + 2)])
-      tlim <- c(latlon[k, "Date"] - 7,
-                latlon[k, "Date"] + 7)
+    out.file.name <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_sst.nc")
+    out.file.name.anom <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_sstanom.nc")
+    out.file.name.lag30d<- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_lag30d.nc")
+    out.file.name.anom.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_sstanom_lag30d.nc")
+    
+    xlim <- c(latlon[k, (4*k1 - 1)],
+              latlon[k, (4*k1 + 1)])
+    ylim <- c(latlon[k, (4*k1)],
+              latlon[k, (4*k1 + 2)])
+    #tlim <- c(latlon[k, "Date"] - 7,
+    #          latlon[k, "Date"] + 7)
+    
+    if(!file.exists(out.file.name)){
+      
+      # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, Monthly
+      sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
+                       latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], "T00:00:00Z)][(", 
+                       ylim[1], "):1:(", ylim[2], ")][(", 
+                       xlim[1], "):1:(", xlim[2], ")]")
 
-      # the URL below has been changed to the following as the old one doesn't exist any longer
-      # 2018-11-02
-      sstURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc?analysed_sst%5B(", latlon[k, "Date"], 
-                       "T09:00:00Z)%5D%5B(", ylim[1], "):1:(", ylim[2], ")%5D%5B(", 
-                       xlim[1], "):1:(", ylim[2], ")%5D")
+      # Aqua MODIS, NPP, 4km, Daytime 2003-present (8 day composite)
+      # sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/erdMH1sstd8day.nc?sst[(", 
+      #                  latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], ")][(", 
+      #                  ylim[2], "):1:(", ylim[1], "][(", 
+      #                  xlim[1], "):1:(", xlim[2], ")]")
 
       test <- download.file(sstURL,
-                            destfile= paste0("data/ncfiles/sst_", k, "_", k1, ".nc"),
+                            destfile = out.file.name,
                             mode='wb')
-
-      datafileID <- nc_open(paste0("data/ncfiles/sst_", k, "_", k1, ".nc"))
-      lon <- ncvar_get(datafileID, varid="longitude")
-      lat <- ncvar_get(datafileID, varid="latitude")
-      time <- ncvar_get(datafileID, varid="time")
-      time <- as.POSIXlt(time,origin='1970-01-01',tz= "GMT")
-      sst.mat <- ncvar_get(datafileID, varid = 'analysed_sst')
-      nc_close(datafileID)
-
-      sst[k, k1] <- mean(sst.mat, na.rm = T)
+      
+    }
     
+    datafileID <- nc_open(out.file.name)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  # true? check with nc files (5/30/2019)
+    mat <- ncvar_get(datafileID, varid = 'sst')
+    nc_close(datafileID)
+    
+    sst[k, k1] <- mean(mat, na.rm = T)
+    sst_sd[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
+    
+    if (!file.exists(out.file.name.anom)){
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
+                           latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], "T00:00:00Z)][(", 
+                           ylim[1], "):1:(", ylim[2], ")][(", 
+                           xlim[1], "):1:(", xlim[2], ")]")
+      test <- download.file(sstanomURL,
+                            destfile = out.file.name.anom,
+                            mode='wb')
+      
+    }
+
+    datafileID <- nc_open(out.file.name.anom)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  # true? check with nc files (5/30/2019)
+    mat <- ncvar_get(datafileID, varid = 'sstAnom')
+    nc_close(datafileID)
+    
+    sst_anom[k, k1] <- mean(mat, na.rm = T)
+    
+    if (!file.exists(out.file.name.lag30d)){
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      sst30dURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
+                           (latlon[k, "Date"] - 30), "T00:00:00Z):1:(", 
+                           (latlon[k, "Date"] - 30), "T00:00:00Z)][(", 
+                           ylim[1], "):1:(", ylim[2], ")][(", 
+                           xlim[1], "):1:(", xlim[2], ")]")
+
+      test <- download.file(sst30dURL,
+                            destfile = out.file.name.lag30d,
+                            mode='wb')
+      
+    }
+    
+    datafileID <- nc_open(out.file.name.lag30d)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+    mat <- ncvar_get(datafileID, varid = 'sst')
+    nc_close(datafileID)
+    
+    sst_lag30d[k, k1] <- mean(mat, na.rm = T)
+  
+    if (!file.exists(out.file.name.anom.lag30d)){
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
+                           (latlon[k, "Date"] - 30), "T00:00:00Z):1:(", 
+                           (latlon[k, "Date"] - 30), "T00:00:00Z)][(", 
+                           ylim[1], "):1:(", ylim[2], ")][(", 
+                           xlim[1], "):1:(", xlim[2], ")]")
+      test <- download.file(sstanomURL,
+                            destfile = out.file.name.anom.lag30d,
+                            mode='wb')
+      
+    }
+
+    datafileID <- nc_open(out.file.name.anom.lag30d)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+    mat <- ncvar_get(datafileID, varid = 'sstAnom')
+    nc_close(datafileID)
+    
+    sst_anom_30d[k, k1] <- mean(mat, na.rm = T)
+    
+      
   }
 }
 
@@ -267,17 +365,61 @@ Once data are downloaded, combine it with the original dataset.
 ```{r}
 sst.df <- data.frame(sst)
 colnames(sst.df) <- c("SST_1", "SST_2", "SST_3")
-dat1 <- cbind(dat0, sst.df)
+
+sst.anom.df <- data.frame(sst_anom)
+colnames(sst.anom.df) <- c("SST_1_ANOM", "SST_2_ANOM", "SST_3_ANOM")
+
+sst.sd.df <- data.frame(sst_sd)
+colnames(sst.sd.df) <- c("SST_1_SD", "SST_2_SD", "SST_3_SD")
+
+sst.lag30d.df <- data.frame(sst_lag30d)
+colnames(sst.lag30d.df) <- c("SST_1_lag30", "SST_2_lag30", "SST_3_lag30")
+
+sst.anom.lag30d.df <- data.frame(sst_anom_30d)
+colnames(sst.anom.lag30d.df) <- c("SST_1_ANOM_lag30", "SST_2_ANOM_lag30", "SST_3_ANOM_lag30")
+
+dat1 <- cbind(dat0, sst.df, sst.anom.df, sst.lag30d.df, sst.sd.df, sst.anom.lag30d.df) %>%
+  mutate(SST_1_CV = SST_1_SD/SST_1,
+         SST_2_CV = SST_2_SD/SST_2,
+         SST_3_CV = SST_3_SD/SST_3)
 
 ggplot(data = dat1) + 
   geom_point(aes(x = SST_1, y = Body_Temp_C, color = Species),
-             size = 2) + 
-  xlim(c(9, 20))
+             size = 2) +
+  xlim(c(8, 15))
 ```
 
 ```{r}
 ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_1, color = Species))
+  geom_point(aes(x = Date, y = SST_3, color = Species))
+```
+
+```{r}
+ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_3_ANOM, color = Species))
+
+```
+
+
+```{r}
+ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_3_CV, color = Species))
+
+```
+
+
+```{r}
+ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_3_lag30, color = Species))
+
+```
+
+
+
+```{r}
+ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_3_ANOM_lag30, color = Species))
+
 ```
 
 
