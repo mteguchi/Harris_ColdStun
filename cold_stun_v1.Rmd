@@ -10,6 +10,8 @@ rm(list=ls())
 source("cold_stun_functions.R")
 library(tidyverse)
 
+save.fig <- TRUE
+
 dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
@@ -125,12 +127,19 @@ p1 <- ggplot() +
   geom_point(data = dat0,
              aes(x = Longitude, 
                  y = Latitude,
-                 color = Species))  +
+                 color = Species),
+             size = 2,
+             alpha = 0.5)  +
   coord_map() +
   xlim(c(-128, E.end))+
   ylab(expression(paste("Latitude (", degree, "N)"))) +
   xlab(expression(paste("Longitude (", degree, "W)", sep=""))) 
     
+if (save.fig)
+  ggsave(plot = p1,
+         device = "png",
+         dpi = 600,
+         filename = "figures/stranding_map.png")
 p1
 ```
 
@@ -139,14 +148,29 @@ We may remove those found south of Pt Conception, as Deena did (true?). But for 
 Look at size measurements:
 
 ```{r}
-ggplot(data = dat0) +
+p2 <- ggplot(data = dat0) +
   geom_point(aes(x = CCL_cm, y = CCW_cm, color = Species, size = Weight_kg))
+
+if (save.fig)
+  ggsave(plot = p2,
+         device = "png",
+         dpi = 600,
+         filename = "figures/CCL_CCW_Mass.png")
+
+p2
 ```
 
 
 ```{r}
-ggplot(data = dat0) + 
+p3 <- ggplot(data = dat0) + 
   geom_point(aes(x = CCL_cm, y = Weight_kg, color = Species, size = CCW_cm))
+
+if (save.fig)
+  ggsave(plot = p3,
+         device = "png",
+         dpi = 600,
+         filename = "figures/CCL_Mass_CCW.png")
+p3
 ```
 
 Looks like one loggerhead has incorrect weight... CCL and CCW for that individual is identical! 
@@ -356,11 +380,24 @@ for (k in 1:nrow(sst)){
 
 ```
 
-We also need the background temperature data for the time period.
+We also need the background temperature data for the time period?
+
+Change in body size over time?
+```{r}
+p <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = CCL_cm, color = Species, size = Latitude))
+
+if (save.fig)
+    ggsave(plot = p,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_CCL_latitude.png")
+
+p
+```
 
 
-
-Once data are downloaded, combine it with the original dataset.
+Once data are downloaded, combine it with the original dataset.  CCL was not measured for 3 with body temperature... kinda odd? Only ridleys are available... 
 
 ```{r}
 sst.df <- data.frame(sst)
@@ -383,43 +420,299 @@ dat1 <- cbind(dat0, sst.df, sst.anom.df, sst.lag30d.df, sst.sd.df, sst.anom.lag3
          SST_2_CV = SST_2_SD/SST_2,
          SST_3_CV = SST_3_SD/SST_3)
 
-ggplot(data = dat1) + 
-  geom_point(aes(x = SST_1, y = Body_Temp_C, color = Species),
-             size = 2) +
+p4 <- ggplot(data = dat1) + 
+  geom_point(aes(x = SST_1, 
+                 y = Body_Temp_C, 
+                 size = CCL_cm)) +
   xlim(c(8, 15))
+
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SST1_BodyTemp.png")
+
+p4
 ```
 
 ```{r}
-ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_3, color = Species))
+
+p5 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3, 
+                 color = Species, 
+                 size = CCL_cm))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST3.png")
+
+p5
 ```
 
 ```{r}
-ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_3_ANOM, color = Species))
+p6 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_ANOM, 
+                 color = Species, 
+                 size = CCL_cm))
 
+if (save.fig)
+  ggsave(plot = p6,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST3anom.png")
+
+p6
 ```
 
 
 ```{r}
-ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_3_CV, color = Species))
+p7 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_CV, 
+                 color = Species, 
+                 size = CCL_cm))
 
+if (save.fig)
+  ggsave(plot = p7,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST3cv.png")
+
+p7
 ```
 
 
 ```{r}
-ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_3_lag30, color = Species))
+p9 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_lag30, 
+                 color = Species, 
+                 size = CCL_cm))
+
+if (save.fig)
+  ggsave(plot = p9,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST3_lag30.png")
+
+p9
 
 ```
 
 
 
 ```{r}
-ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_3_ANOM_lag30, color = Species))
+p8 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_ANOM_lag30, 
+                 color = Species, 
+                 size = CCL_cm))
 
+if (save.fig)
+  ggsave(plot = p8,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST3anom_lag30.png")
+
+p8
+```
+
+
+```{r}
+p10 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, 
+                 y = SST_2_lag30, 
+                 color = Species, 
+                 size = CCL_cm))
+
+
+if (save.fig)
+  ggsave(plot = p10,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST2_lag30.png")
+
+
+p10
+```
+
+
+
+```{r}
+p11 <- ggplot(data = dat1) + 
+  geom_point(aes(x = Date, y = SST_2_ANOM_lag30, color = Species, size = CCL_cm))
+
+if (save.fig)
+  ggsave(plot = p11,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST2anom_lag30.png")
+
+p11
+```
+
+It seems like 2015 was a quite different year from all others - the reasons for these observed strandings for 2015 might have been different from others. So, to incorporate the climate effect, I downloaded El Nino index from here (https://www.esrl.noaa.gov/psd/enso/mei/). The data file consists of two-month values for each year, starting in 1979.  The current version (as of June 5, 2019) includes 2019 March/April.  Raw data file (meiv2_20190605.txt) was manipulated to remove lines that describe the datafile, rather than providing actual index values.  The new file is named meiv2_notext_20190605.txt. Missing values for the remainder of 2019 are indicated by -999.00. 
+
+```{r}
+library(data.table)
+MEI.v2 <- fread(file = "data/meiv2_notext_20190605.txt")
+colnames(MEI.v2) <- c("Year", "DJ", "JF", "FM", "MA", "AM", 
+                      "MJ", "JJ", "JA", "AS", "SO", "ON", "ND") 
+MEI.v2[MEI.v2==-999] <- NA
+
+MEI.v2.long <- melt(MEI.v2, 
+                    id.vars = "Year", 
+                    value.name = "MEI.v2",
+                    variable.name = "period")
+
+month <- vector(mode = "numeric", length = nrow(MEI.v2.long))
+
+month[MEI.v2.long$period == "DJ"] <- 1
+month[MEI.v2.long$period == "JF"] <- 2
+month[MEI.v2.long$period == "FM"] <- 3
+month[MEI.v2.long$period == "MA"] <- 4
+month[MEI.v2.long$period == "AM"] <- 5
+month[MEI.v2.long$period == "MJ"] <- 6
+month[MEI.v2.long$period == "JJ"] <- 7
+month[MEI.v2.long$period == "JA"] <- 8
+month[MEI.v2.long$period == "AS"] <- 9
+month[MEI.v2.long$period == "SO"] <- 10
+month[MEI.v2.long$period == "ON"] <- 11
+month[MEI.v2.long$period == "ND"] <- 12
+
+MEI.v2.long$month <- month
+MEI.v2.long$year.month.num <- MEI.v2.long$Year + MEI.v2.long$month/12
+
+MEI.v2.long <- arrange(MEI.v2.long, Year)
+
+MEI.v2.lag1yr.long <- cbind(Year = MEI.v2.long$Year[13:nrow(MEI.v2.long)],
+                            MEI.v2.long[1:(nrow(MEI.v2.long)-12), 2:ncol(MEI.v2.long)])
+
+MEI.v2.lag6mo.long <- cbind(Year = MEI.v2.long$Year[7:nrow(MEI.v2.long)],
+                            MEI.v2.long[1:(nrow(MEI.v2.long)-6), 2:ncol(MEI.v2.long)])
+
+MEI.v2.long %>% 
+  mutate(year.month = paste(Year, month, sep = ".")) -> MEI.v2.long
+
+MEI.v2.lag1yr.long %>% 
+  mutate(year.month = paste(Year, month, sep = ".")) %>%
+  rename(MEI.v2.lag1yr = MEI.v2) -> MEI.v2.lag1yr.long
+
+MEI.v2.lag6mo.long %>% 
+  mutate(year.month = paste(Year, month, sep = ".")) %>%
+  rename(MEI.v2.lag6mo = MEI.v2) -> MEI.v2.lag6mo.long
+
+dat1 %>% mutate(year.month = paste(lubridate::year(Date),
+                                   lubridate::month(Date),
+                                   sep = ".")) -> dat1
+
+dat1.MEI <- left_join(dat1, MEI.v2.long, by = "year.month")
+dat1.MEI.lag1yr <- left_join(dat1, MEI.v2.lag1yr.long, by = "year.month")
+dat1.MEI.lag6mo <- left_join(dat1, MEI.v2.lag6mo.long, by = "year.month")
+```
+
+How does the MEI values play a role in strandings?
+
+```{r}
+p12 <- ggplot(data = dat1.MEI) + 
+  geom_point(aes(x = Date, 
+                 y = MEI.v2, 
+                 color = Species, 
+                 size = CCL_cm))
+
+if (save.fig)
+  ggsave(plot = p12,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_MEIv2.png")
+
+p12
+```
+
+So, the strandings during 2015 and early 2016 might have been affected by positive MEI values - possibly in the northern region?  Next plot adds latitude to this plot and size information is dropped.
+
+```{r}
+p13 <- ggplot(data = dat1.MEI) + 
+  geom_point(aes(x = Date, 
+                 y = MEI.v2, 
+                 color = Species, 
+                 size = Latitude))
+
+if (save.fig)
+  ggsave(plot = p13,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_MEIv2_latitude.png")
+
+p13
+
+```
+
+What if we lag MEI by 6 months or 1 year?
+
+```{r}
+
+p14 <- ggplot(data = dat1.MEI.lag1yr) + 
+  geom_point(aes(x = Date, 
+                 y = MEI.v2.lag1yr, 
+                 color = Species, 
+                 size = Latitude))
+
+if (save.fig)
+  ggsave(plot = p14,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_MEIv2lag1yr_latitude.png")
+
+p14
+```
+
+```{r}
+
+p15 <- ggplot(data = dat1.MEI.lag6mo) + 
+  geom_point(aes(x = Date, 
+                 y = MEI.v2.lag6mo, 
+                 color = Species, 
+                 size = Latitude))
+
+if (save.fig)
+  ggsave(plot = p15,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_MEIv2lag6mo_latitude.png")
+
+p15
+```
+
+How did the MEI change over time?
+
+```{r}
+ggplot() + 
+  geom_point(data = filter(MEI.v2.lag1yr.long, 
+                           Year > 2009),
+             aes(x = year.month.num,
+                 y = MEI.v2.lag1yr)) + 
+  geom_point(data = dat1.MEI,
+             aes(x = year.month.num,
+                 y = 0,
+                 size = CCL_cm,
+                 color = Species))
+```
+
+# strandings per year? 
+
+```{r}
+dat1.MEI %>% filter(Year > 2009) %>%
+  group_by(Year) %>%
+  summarise(mean.MEI = mean(MEI.v2),
+         n = n()) -> dat1.MEI.byYr
+
+ggplot(dat1.MEI.byYr) + 
+  geom_point(aes(x = Year, y = n, color = mean.MEI))
 ```
 
 
