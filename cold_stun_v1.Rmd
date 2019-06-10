@@ -10,9 +10,9 @@ rm(list=ls())
 source("cold_stun_functions.R")
 library(tidyverse)
 
-save.fig <- TRUE
+save.fig <- FALSE #TRUE
 
-dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv", 
+dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
   select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
@@ -29,7 +29,8 @@ dat0 <- read.csv(file = "data/ColdStun_data_May2019.csv",
          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
   select(ID, Age, State, Latitude, Longitude, 
          Sex, Weight_kg, CCL_cm, CCW_cm,
-         Body_Temp_C, Date, Species)
+         Body_Temp_C, Date, Species) %>%
+  filter(Latitude > 34.45)
 
 summary(dat0)
 ```
@@ -45,7 +46,7 @@ border.color <- "gray20"
 E.end <- -112
 W.end <- -128
 N.end <- 51
-S.end <- 30
+S.end <- 32
 # coast line data are from here: http://openstreetmapdata.com/data/coastlines or
 # https://shoreline.noaa.gov/data/datasheets/medres.html and
 # http://datapages.com/gis-map-publishing-program/gis-open-files/global-framework/global-heat-flow-database/shapefiles-list
@@ -94,7 +95,7 @@ state_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/cb_201
                                                    verbose = FALSE),
                                     sp::CRS("+proj=longlat +datum=WGS84"))
 
-state_border <- raster::crop(state_border, raster::extent(c(W.end, E.end, 32, 50)))
+state_border <- raster::crop(state_border, raster::extent(c(W.end, E.end, 30, 50)))
 state_border.df <- broom::tidy(state_border)
 
 p1 <- ggplot() + 
@@ -251,11 +252,25 @@ for (k in 1:(2*d.n)){
 latlon$Date <- dat0$Date
 
 sst <- sst_anom <- sst_sd <- sst_lag30d <- sst_anom_30d <- matrix(nrow = nrow(latlon),
-              ncol = d.n)
+                                                                  ncol = d.n)
+
+sst_min <- sst_min_lag30d <- air_temp <- air_temp_30d <- matrix(nrow = nrow(latlon),
+                                                                ncol = d.n)
+
+wind <- wind_max <- wind_30d <- wind_max_30d <- matrix(nrow = nrow(latlon),
+                                           ncol = 1)
 k <- k1 <- 1
 
 # for all rows
 for (k in 1:nrow(sst)){
+  # wind comes in 0.25 degree resolutions so we just pick one without worrying about other spatial
+  # resolutions
+  out.file.name.wind <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                               "wind.nc")
+  
+  out.file.name.wind.30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                   "wind_30d.nc")
+  
   # for number of distances
   for (k1 in 1:d.n){
     out.file.name <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
@@ -263,9 +278,14 @@ for (k in 1:nrow(sst)){
     out.file.name.anom <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
                                              ds[k1], "km_sstanom.nc")
     out.file.name.lag30d<- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
-                                             ds[k1], "km_lag30d.nc")
+                                             ds[k1], "km_sst_lag30d.nc")
     out.file.name.anom.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
                                              ds[k1], "km_sstanom_lag30d.nc")
+    out.file.name.air.temp<- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_airtemp.nc")
+    out.file.name.air.temp.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_airtemp_lag30d.nc")
+    
     
     xlim <- c(latlon[k, (4*k1 - 1)],
               latlon[k, (4*k1 + 1)])
@@ -278,7 +298,8 @@ for (k in 1:nrow(sst)){
       
       # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, Monthly
       sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
-                       latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], "T00:00:00Z)][(", 
+                       latlon[k, "Date"], "T00:00:00Z):1:(", 
+                       latlon[k, "Date"], "T00:00:00Z)][(", 
                        ylim[1], "):1:(", ylim[2], ")][(", 
                        xlim[1], "):1:(", xlim[2], ")]")
 
@@ -304,11 +325,13 @@ for (k in 1:nrow(sst)){
     
     sst[k, k1] <- mean(mat, na.rm = T)
     sst_sd[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
+    sst_min[k, k1] <- min(mat, na.rm = T)
     
     if (!file.exists(out.file.name.anom)){
       # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
-                           latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], "T00:00:00Z)][(", 
+                           latlon[k, "Date"], "T00:00:00Z):1:(", 
+                           latlon[k, "Date"], "T00:00:00Z)][(", 
                            ylim[1], "):1:(", ylim[2], ")][(", 
                            xlim[1], "):1:(", xlim[2], ")]")
       test <- download.file(sstanomURL,
@@ -330,8 +353,8 @@ for (k in 1:nrow(sst)){
     if (!file.exists(out.file.name.lag30d)){
       # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
       sst30dURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
-                           (latlon[k, "Date"] - 30), "T00:00:00Z):1:(", 
-                           (latlon[k, "Date"] - 30), "T00:00:00Z)][(", 
+                           (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
+                           (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
                            ylim[1], "):1:(", ylim[2], ")][(", 
                            xlim[1], "):1:(", xlim[2], ")]")
 
@@ -350,12 +373,13 @@ for (k in 1:nrow(sst)){
     nc_close(datafileID)
     
     sst_lag30d[k, k1] <- mean(mat, na.rm = T)
+    sst_min_lag30d[k, k1] <- min(mat, na.rm = T)
   
     if (!file.exists(out.file.name.anom.lag30d)){
       # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
-                           (latlon[k, "Date"] - 30), "T00:00:00Z):1:(", 
-                           (latlon[k, "Date"] - 30), "T00:00:00Z)][(", 
+                           (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
+                           (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
                            ylim[1], "):1:(", ylim[2], ")][(", 
                            xlim[1], "):1:(", xlim[2], ")]")
       test <- download.file(sstanomURL,
@@ -374,9 +398,243 @@ for (k in 1:nrow(sst)){
     
     sst_anom_30d[k, k1] <- mean(mat, na.rm = T)
     
-      
+    # havent' found good airtemp dataset yet.
+    # if (!file.exists(out.file.name.air.temp)){
+    #   # NOAA NOS SOS, Experimental, 1853-present, Air temperature
+    #   # (https://coastwatch.pfeg.noaa.gov/erddap/tabledap/nosSosATemp.html)
+    #   airtempURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/tabledap/nosSosATemp.nc?longitude%2Clatitude%2Ctime%2Cair_temperature%2Cquality_flags&longitude%3E=", 
+    #                        xlim[1], "&longitude%3C=", xlim[2], 
+    #                        "&latitude%3E=", ylim[1], "&latitude%3C=", ylim[2], 
+    #                        "&time%3E=", latlon[k, "Date"], 
+    #                        "T00%3A00%3A00Z&time%3C=", latlon[k, "Date"], "T00%3A00%3A00Z")
+    #   
+    #   test <- download.file(airtempURL,
+    #                         destfile = out.file.name.air.temp,
+    #                         mode='wb')
+    #   
+    #   datafileID <- nc_open(out.file.name.air.temp)
+    #   lon <- ncvar_get(datafileID, varid="longitude")
+    #   lat <- ncvar_get(datafileID, varid="latitude")
+    #   time <- ncvar_get(datafileID, varid="time")
+    #   time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+    #   mat <- ncvar_get(datafileID, varid = '')
+    #   nc_close(datafileID)
+    #   
+    #   air_temp[k, k1] <- mean(mat, na.rm = T)
+    #   
+    #   
+    # }
+    
+    
   }
+  if (!file.exists(out.file.name.wind)){
+    # wind speed and direction data end at 2018-10-09: 
+    
+    # NOAA/NCDC blended daily global 0.25-degree sea surface winds, 1987-2011, Lon +/-180 
+    # (https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOwDly_LonPM180.html)
+    
+    #longitude needs to be increments of 0.25 degrees:
+    # because we are always in the negative longitude values...
+    cut.off.lon <- c(0.75, 0.5, 0.25, 0)
+    dif.lon <- abs(trunc(latlon[k, "X"]) - cut.off.lon - latlon[k, "X"])
+    X.cut.off <- trunc(latlon[k, "X"]) - cut.off.lon[dif.lon == min(dif.lon)]
+    X.min <- ifelse(X.cut.off >= latlon[k, "X"], X.cut.off - 0.25, X.cut.off)
+    X.max <- X.min + 0.25
+    
+    # and latitude is always positive in our case
+    cut.off.lat <- c(0, 0.25, 0.5, 0.75)
+    dif.lat <- abs(latlon[k, "Y"] - cut.off.lat - latlon[k, "Y"])
+    Y.cut.off <- trunc(latlon[k, "Y"]) - cut.off.lat[dif.lat == min(dif.lat)]
+    Y.min <- ifelse(Y.cut.off >= latlon[k, "Y"], Y.cut.off - 0.25, Y.cut.off)
+    Y.max <- Y.min + 0.25
+    
+    if (lubridate::year(latlon[k, "Date"]) < 2011){
+      var.name <- "ncdcOwDly"
+    } else {
+      var.name <-"ncdcOwDlyP" 
+       
+    }
+
+    if (latlon[k, "Date"] < as.Date("2018-10-10")){
+      windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, "_LonPM180.nc?u[(",
+                        latlon[k, "Date"], "T09:00:00Z):1:(", latlon[k, "Date"],
+                        "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
+                        X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"], "T09:00:00Z):1:(", 
+                        latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
+                        Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"],
+                        "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
+                        Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
+      
+      
+      test <- download.file(windURL,
+                            destfile = out.file.name.wind,
+                            mode='wb')
+  
+      
+    }
+  }  
+
+  if (latlon[k, "Date"] < as.Date("2018-10-10")){
+    datafileID <- nc_open(out.file.name.wind)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+    u <- ncvar_get(datafileID, varid = "u")
+    v <- ncvar_get(datafileID, varid = "v")
+    w <- ncvar_get(datafileID, varid = "w")
+    
+    nc_close(datafileID)
+  } else {
+    U <- v <- w <- NA
+  }
+  wind[k, 1] <- mean(w, na.rm = T)
+  wind_max[k, 1] <- max(w, na.rm = T)
+  #wind_u[k, 1] <- mean(u, na.rm = T)
+  #wind_v[k, 1] <- mean(v, na.rm = T)
+  
+  
+  if (!file.exists(out.file.name.wind.30d)){
+    # wind speed and direction data end at 2018-10-09: 
+    
+    # NOAA/NCDC blended daily global 0.25-degree sea surface winds, 1987-2011, Lon +/-180 
+    # (https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOwDly_LonPM180.html)
+    
+    #longitude needs to be increments of 0.25 degrees:
+    # because we are always in the negative longitude values...
+    cut.off.lon <- c(0.75, 0.5, 0.25, 0)
+    dif.lon <- abs(trunc(latlon[k, "X"]) - cut.off.lon - latlon[k, "X"])
+    X.cut.off <- trunc(latlon[k, "X"]) - cut.off.lon[dif.lon == min(dif.lon)]
+    X.min <- ifelse(X.cut.off >= latlon[k, "X"], X.cut.off - 0.25, X.cut.off)
+    X.max <- X.min + 0.25
+    
+    # and latitude is always positive in our case
+    cut.off.lat <- c(0, 0.25, 0.5, 0.75)
+    dif.lat <- abs(latlon[k, "Y"] - cut.off.lat - latlon[k, "Y"])
+    Y.cut.off <- trunc(latlon[k, "Y"]) - cut.off.lat[dif.lat == min(dif.lat)]
+    Y.min <- ifelse(Y.cut.off >= latlon[k, "Y"], Y.cut.off - 0.25, Y.cut.off)
+    Y.max <- Y.min + 0.25
+    
+    if (latlon[k, "Date"] < as.Date("2011-10-01")){
+      var.name <- "ncdcOwDly" # to 2011-09-30
+      windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, "_LonPM180.nc?u[(",
+                        latlon[k, "Date"]-29, "T09:00:00Z):1:(", latlon[k, "Date"],
+                        "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
+                        X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29, "T09:00:00Z):1:(", 
+                        latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
+                        Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
+                        "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
+                        Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
+      
+      test <- download.file(windURL,
+                            destfile = out.file.name.wind.30d,
+                            mode='wb')
+    } else {
+      var.name <-"ncdcOwDlyP" # from 2011-10-01
+      if((latlon[k, "Date"] - 30) < as.Date("2011-10-01")){
+        var.name.2 <- "ncdcOwDly"
+        windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name.2,
+                          "_LonPM180.nc?u[(",
+                          latlon[k, "Date"]-29, 
+                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(",
+                          Y.min, "):1:(", Y.max, ")][(", 
+                          X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-30,
+                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
+                          Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
+                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", 
+                          Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
+        
+        test <- download.file(windURL,
+                              destfile = paste0(unlist(out.file.name.wind.30d, "\\.nc"), "_dat1.nc"),
+                              mode='wb')
+        
+        windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, 
+                          "_LonPM180.nc?u[(2011-10-01T09:00:00Z):1:(", latlon[k, "Date"],
+                          "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
+                          X.min, "):1:(", X.max, ")],v[(2011-10-01T09:00:00Z):1:(", 
+                          latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
+                          Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(2011-10-01T09:00:00Z):1:(",
+                          latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
+                          Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
+        
+        test <- download.file(windURL,
+                              destfile = out.file.name.wind.30d,
+                              mode='wb')
+      } else {
+        if (latlon[k, "Date"] < as.Date("2018-10-10")){
+          
+          windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name,
+                            "_LonPM180.nc?u[(",
+                            latlon[k, "Date"]-29, "T09:00:00Z):1:(", latlon[k, "Date"],
+                            "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
+                            X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29, "T09:00:00Z):1:(", 
+                            latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
+                            Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
+                            "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
+                            Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
+          
+          test <- download.file(windURL,
+                                destfile = out.file.name.wind.30d,
+                                mode='wb')
+        }
+      }
+      
+      
+    }
+  }
+    
+  if (((latlon[k, "Date"] > as.Date("2011-09-30")) & 
+       (latlon[k, "Date"] - 30) < as.Date("2011-10-01"))){
+    
+    datafileID <- nc_open(out.file.name.wind.30d)
+    datafileID2 <- nc_open(paste0(unlist(out.file.name.wind.30d, "\\.nc"), "_dat1.nc"))
+    
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+    u <- ncvar_get(datafileID, varid = "u")
+    v <- ncvar_get(datafileID, varid = "v")
+    w <- ncvar_get(datafileID, varid = "w")
+    
+    lon2 <- ncvar_get(datafileID2, varid="longitude")
+    lat2 <- ncvar_get(datafileID2, varid="latitude")
+    time2 <- ncvar_get(datafileID2, varid="time")
+    time2 <- as.POSIXlt(time2, origin='1970-01-01', tz= "GMT")  
+    u2 <- ncvar_get(datafileID2, varid = "u")
+    v2 <- ncvar_get(datafileID2, varid = "v")
+    w2 <- ncvar_get(datafileID2, varid = "w")
+    
+    nc_close(datafileID)
+    nc_close(datafileID2)
+    
+    u <- abind::abind(u, u2)
+    v <- abind::abind(v, v2)
+    w <- abind::abind(w, w2)
+    
+  } else {
+    if (latlon[k, "Date"] < as.Date("2018-10-10")){
+      datafileID <- nc_open(out.file.name.wind.30d)
+      lon <- ncvar_get(datafileID, varid="longitude")
+      lat <- ncvar_get(datafileID, varid="latitude")
+      time <- ncvar_get(datafileID, varid="time")
+      time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+      u <- ncvar_get(datafileID, varid = "u")
+      v <- ncvar_get(datafileID, varid = "v")
+      w <- ncvar_get(datafileID, varid = "w")
+      
+      nc_close(datafileID)
+    } else {
+      w <- u <- v <- NA
+    }
+  }
+  
+  wind_30d[k, 1] <- mean(w, na.rm = T)
+  wind_max_30d[k, 1] <- max(w, na.rm = T)
+  #wind_u_30d[k, 1] <- mean(u, na.rm = T)
+  #wind_v_30d[k, 1] <- mean(v, na.rm = T)
 }
+
 
 ```
 
@@ -384,7 +642,7 @@ We also need the background temperature data for the time period?
 
 Change in body size over time?
 ```{r}
-p <- ggplot(data = dat1) + 
+p <- ggplot(data = dat0) + 
   geom_point(aes(x = Date, y = CCL_cm, color = Species, size = Latitude))
 
 if (save.fig)
@@ -409,28 +667,43 @@ colnames(sst.anom.df) <- c("SST_1_ANOM", "SST_2_ANOM", "SST_3_ANOM")
 sst.sd.df <- data.frame(sst_sd)
 colnames(sst.sd.df) <- c("SST_1_SD", "SST_2_SD", "SST_3_SD")
 
+sst.min.df <- data.frame(sst_min)
+colnames(sst.min.df) <- c("SST_1_min", "SST_2_min", "SST_3_min")
+
 sst.lag30d.df <- data.frame(sst_lag30d)
 colnames(sst.lag30d.df) <- c("SST_1_lag30", "SST_2_lag30", "SST_3_lag30")
+
+sst.min.lag30d.df <- data.frame(sst_min_lag30d)
+colnames(sst.lag30d.df) <- c("SST_1_min_lag30", "SST_2_min_lag30", "SST_3_min_lag30")
 
 sst.anom.lag30d.df <- data.frame(sst_anom_30d)
 colnames(sst.anom.lag30d.df) <- c("SST_1_ANOM_lag30", "SST_2_ANOM_lag30", "SST_3_ANOM_lag30")
 
-dat1 <- cbind(dat0, sst.df, sst.anom.df, sst.lag30d.df, sst.sd.df, sst.anom.lag30d.df) %>%
+wind.df <- data.frame(wind)
+
+dat1 <- cbind(dat0, 
+              sst.df, 
+              sst.min.df, 
+              sst.anom.df, 
+              sst.lag30d.df, 
+              sst.min.lag30d.df, 
+              sst.sd.df, 
+              sst.anom.lag30d.df) %>%
   mutate(SST_1_CV = SST_1_SD/SST_1,
          SST_2_CV = SST_2_SD/SST_2,
          SST_3_CV = SST_3_SD/SST_3)
 
 p4 <- ggplot(data = dat1) + 
-  geom_point(aes(x = SST_1, 
+  geom_point(aes(x = SST_1_min, 
                  y = Body_Temp_C, 
                  size = CCL_cm)) +
-  xlim(c(8, 15))
+  xlim(c(9, 12))
 
 if (save.fig)
   ggsave(plot = p4,
          device = "png",
          dpi = 600,
-         filename = "figures/SST1_BodyTemp.png")
+         filename = "figures/SST1_min_BodyTemp.png")
 
 p4
 ```
@@ -439,15 +712,15 @@ p4
 
 p5 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
-                 y = SST_3, 
-                 color = Species, 
-                 size = CCL_cm))
+                 y = SST_3_min, 
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p5,
          device = "png",
          dpi = 600,
-         filename = "figures/date_SST3.png")
+         filename = "figures/date_SST3_min.png")
 
 p5
 ```
@@ -456,8 +729,8 @@ p5
 p6 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
                  y = SST_3_ANOM, 
-                 color = Species, 
-                 size = CCL_cm))
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p6,
@@ -473,8 +746,8 @@ p6
 p7 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
                  y = SST_3_CV, 
-                 color = Species, 
-                 size = CCL_cm))
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p7,
@@ -489,15 +762,15 @@ p7
 ```{r}
 p9 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
-                 y = SST_3_lag30, 
-                 color = Species, 
-                 size = CCL_cm))
+                 y = SST_3_min_lag30, 
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p9,
          device = "png",
          dpi = 600,
-         filename = "figures/date_SST3_lag30.png")
+         filename = "figures/date_SST3_min_lag30.png")
 
 p9
 
@@ -509,8 +782,8 @@ p9
 p8 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
                  y = SST_3_ANOM_lag30, 
-                 color = Species, 
-                 size = CCL_cm))
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p8,
@@ -525,16 +798,16 @@ p8
 ```{r}
 p10 <- ggplot(data = dat1) + 
   geom_point(aes(x = Date, 
-                 y = SST_2_lag30, 
-                 color = Species, 
-                 size = CCL_cm))
+                 y = SST_2_min_lag30, 
+                 color = Species),
+             size = 3)
 
 
 if (save.fig)
   ggsave(plot = p10,
          device = "png",
          dpi = 600,
-         filename = "figures/date_SST2_lag30.png")
+         filename = "figures/date_SST2_min_lag30.png")
 
 
 p10
@@ -544,7 +817,10 @@ p10
 
 ```{r}
 p11 <- ggplot(data = dat1) + 
-  geom_point(aes(x = Date, y = SST_2_ANOM_lag30, color = Species, size = CCL_cm))
+  geom_point(aes(x = Date, 
+                 y = SST_2_ANOM_lag30, 
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p11,
@@ -621,8 +897,8 @@ How does the MEI values play a role in strandings?
 p12 <- ggplot(data = dat1.MEI) + 
   geom_point(aes(x = Date, 
                  y = MEI.v2, 
-                 color = Species, 
-                 size = CCL_cm))
+                 color = Species),
+             size = 3)
 
 if (save.fig)
   ggsave(plot = p12,
@@ -699,8 +975,8 @@ ggplot() +
   geom_point(data = dat1.MEI,
              aes(x = year.month.num,
                  y = 0,
-                 size = CCL_cm,
-                 color = Species))
+                 color = Species),
+             size = 3)
 ```
 
 # strandings per year? 
@@ -712,7 +988,30 @@ dat1.MEI %>% filter(Year > 2009) %>%
          n = n()) -> dat1.MEI.byYr
 
 ggplot(dat1.MEI.byYr) + 
-  geom_point(aes(x = Year, y = n, color = mean.MEI))
+  geom_point(aes(x = mean.MEI, y = n, color = Year), size = 3)
 ```
 
+
+```{r}
+dat1.MEI.lag1yr %>% 
+  filter(Year > 2009) %>%
+  group_by(Year) %>%
+  summarise(mean.MEI = mean(MEI.v2.lag1yr),
+         n = n()) -> dat1.MEI.lag1yr.byYr
+
+ggplot(dat1.MEI.lag1yr.byYr) + 
+  geom_point(aes(x = mean.MEI, y = n, color = Year), size = 3)
+```
+
+
+```{r}
+dat1.MEI.lag6mo %>% 
+  filter(Year > 2009) %>%
+  group_by(Year) %>%
+  summarise(mean.MEI = mean(MEI.v2.lag6mo),
+         n = n()) -> dat1.MEI.lag6mo.byYr
+
+ggplot(dat1.MEI.lag6mo.byYr) + 
+  geom_point(aes(x = mean.MEI, y = n, color = Year), size = 3)
+```
 
