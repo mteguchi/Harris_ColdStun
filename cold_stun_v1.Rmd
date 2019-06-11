@@ -286,7 +286,6 @@ for (k in 1:nrow(sst)){
     out.file.name.air.temp.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
                                              ds[k1], "km_airtemp_lag30d.nc")
     
-    
     xlim <- c(latlon[k, (4*k1 - 1)],
               latlon[k, (4*k1 + 1)])
     ylim <- c(latlon[k, (4*k1)],
@@ -300,8 +299,10 @@ for (k in 1:nrow(sst)){
       sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
                        latlon[k, "Date"], "T00:00:00Z):1:(", 
                        latlon[k, "Date"], "T00:00:00Z)][(", 
-                       ylim[1], "):1:(", ylim[2], ")][(", 
-                       xlim[1], "):1:(", xlim[2], ")]")
+                       signif(ylim[1], digits = 4), "):1:(", 
+                       signif(ylim[2], digits = 4), ")][(", 
+                       signif(xlim[1], digits = 5), "):1:(", 
+                       signif(xlim[2], digits = 5), ")]")
 
       # Aqua MODIS, NPP, 4km, Daytime 2003-present (8 day composite)
       # sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/erdMH1sstd8day.nc?sst[(", 
@@ -332,8 +333,10 @@ for (k in 1:nrow(sst)){
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
                            latlon[k, "Date"], "T00:00:00Z):1:(", 
                            latlon[k, "Date"], "T00:00:00Z)][(", 
-                           ylim[1], "):1:(", ylim[2], ")][(", 
-                           xlim[1], "):1:(", xlim[2], ")]")
+                           signif(ylim[1], 4), "):1:(", 
+                           signif(ylim[2], 4), ")][(", 
+                           signif(xlim[1], 5), "):1:(", 
+                           signif(xlim[2], 5), ")]")
       test <- download.file(sstanomURL,
                             destfile = out.file.name.anom,
                             mode='wb')
@@ -353,10 +356,12 @@ for (k in 1:nrow(sst)){
     if (!file.exists(out.file.name.lag30d)){
       # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
       sst30dURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
-                           (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
-                           (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
-                           ylim[1], "):1:(", ylim[2], ")][(", 
-                           xlim[1], "):1:(", xlim[2], ")]")
+                          (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
+                          (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
+                          signif(ylim[1], 4), "):1:(", 
+                          signif(ylim[2], 4), ")][(", 
+                          signif(xlim[1], 5), "):1:(", 
+                          signif(xlim[2], 5), ")]")
 
       test <- download.file(sst30dURL,
                             destfile = out.file.name.lag30d,
@@ -380,8 +385,8 @@ for (k in 1:nrow(sst)){
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
                            (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
                            (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
-                           ylim[1], "):1:(", ylim[2], ")][(", 
-                           xlim[1], "):1:(", xlim[2], ")]")
+                           signif(ylim[1], 4), "):1:(", signif(ylim[2], 4), ")][(", 
+                           signif(xlim[1], 5), "):1:(", signif(xlim[2], 5), ")]")
       test <- download.file(sstanomURL,
                             destfile = out.file.name.anom.lag30d,
                             mode='wb')
@@ -465,12 +470,10 @@ for (k in 1:nrow(sst)){
                         "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
                         Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
       
-      
       test <- download.file(windURL,
                             destfile = out.file.name.wind,
                             mode='wb')
   
-      
     }
   }  
 
@@ -538,7 +541,7 @@ for (k in 1:nrow(sst)){
                           latlon[k, "Date"]-29, 
                           "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(",
                           Y.min, "):1:(", Y.max, ")][(", 
-                          X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-30,
+                          X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29,
                           "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
                           Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
                           "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", 
@@ -996,11 +999,11 @@ ggplot(dat1.MEI.byYr) +
 dat1.MEI.lag1yr %>% 
   filter(Year > 2009) %>%
   group_by(Year) %>%
-  summarise(mean.MEI = mean(MEI.v2.lag1yr),
+  summarise(mean.MEI.lag1yr = mean(MEI.v2.lag1yr),
          n = n()) -> dat1.MEI.lag1yr.byYr
 
 ggplot(dat1.MEI.lag1yr.byYr) + 
-  geom_point(aes(x = mean.MEI, y = n, color = Year), size = 3)
+  geom_point(aes(x = mean.MEI.lag1yr, y = n, color = Year), size = 3)
 ```
 
 
@@ -1008,10 +1011,10 @@ ggplot(dat1.MEI.lag1yr.byYr) +
 dat1.MEI.lag6mo %>% 
   filter(Year > 2009) %>%
   group_by(Year) %>%
-  summarise(mean.MEI = mean(MEI.v2.lag6mo),
+  summarise(mean.MEI.lag6mo = mean(MEI.v2.lag6mo),
          n = n()) -> dat1.MEI.lag6mo.byYr
 
 ggplot(dat1.MEI.lag6mo.byYr) + 
-  geom_point(aes(x = mean.MEI, y = n, color = Year), size = 3)
+  geom_point(aes(x = mean.MEI.lag6mo, y = n, color = Year), size = 3)
 ```
 
