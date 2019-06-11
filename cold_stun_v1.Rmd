@@ -5,7 +5,9 @@ output: html_notebook
 
 This document describes statistical analyses of cold stunned marine turtle data from Heather Harris. First load data and see what they look like.
 
+
 ```{r}
+
 rm(list=ls())
 source("cold_stun_functions.R")
 library(tidyverse)
@@ -33,118 +35,11 @@ dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv",
   filter(Latitude > 34.45)
 
 summary(dat0)
+
 ```
 
-After tweaking data a bit, now we have somewhat cleaned up data. First, look at the stranding locations. This should be the same plot as Figure 1 in Deena's report.
 
-```{r, warning=FALSE, cache=TRUE}
-
-water.color <- "lightblue"
-land.color <- "darkgray"
-border.color <- "gray20"
-
-E.end <- -112
-W.end <- -128
-N.end <- 51
-S.end <- 32
-# coast line data are from here: http://openstreetmapdata.com/data/coastlines or
-# https://shoreline.noaa.gov/data/datasheets/medres.html and
-# http://datapages.com/gis-map-publishing-program/gis-open-files/global-framework/global-heat-flow-database/shapefiles-list
-# https://www12.statcan.gc.ca/census-recensement/2011/geo/bound-limit/bound-limit-2016-eng.cfm
-
-# https://www.ngdc.noaa.gov/mgg/shorelines/shorelines.html f is the full resolution - too big
-# h is high resolution - should be good enough. 
-all.coast <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/gshhg-shp-2.3.7/GSHHS_shp/h",
-                                            layer = "GSHHS_h_L1",
-                                            verbose = FALSE),
-                             sp::CRS("+proj=longlat +datum=WGS84"))
-
-W.coast <- raster::crop(all.coast, raster::extent(c(W.end, E.end, S.end, N.end)))
-
-W.coast.df <- broom::tidy(W.coast) 
-#   filter(long < E.end & long > W.end & lat < N.end & lat > S.end)
-
-# coast.line.df <- do.call(rbind, W.coast.df)
-# colnames(coast.line.df) <- c('X', 'Y', 'idx')
-# coast.line.Sp <- latlon2sp(coast.line.df, center.latlon)
-
-# the following shape file was obttained from here: #https://gis.stackexchange.com/questions/153514/us-mexican-border-data
-# note that the USGS link is broken but direct link "here" is available. 
-# http://txpub.usgs.gov/BEHI/Data_download/Boundaries_Layers/International_Boundary_shp.zip
-US_MX_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/International_Boundary/shp",
-                                               layer = "International_Boundary_Final",
-                                               verbose = FALSE),
-                                sp::CRS("+proj=longlat +datum=WGS84"))
-
-US_MX_border <- raster::crop(US_MX_border, raster::extent(c(W.end, E.end, 30, 35)))
-US_MX_border.df <- broom::tidy(US_MX_border)
-
-# US-Canada border was obtained from here: 
-# https://hifld-geoplatform.opendata.arcgis.com/datasets/canada-and-us-border
-US_Canada_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/Canada_and_US_Border",
-                                                  layer = "Canada_and_US_Border",
-                                                  verbose = FALSE),
-                                   sp::CRS("+proj=longlat +datum=WGS84"))
-
-US_Canada_border <- raster::crop(US_Canada_border, raster::extent(c(W.end, E.end, 47, 51)))
-US_Canada_border.df <- broom::tidy(US_Canada_border) 
-
-# state borders from here: https://www.census.gov/geo/maps-data/data/cbf/cbf_state.html
-state_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/cb_2017_us_state_500k",
-                                                   layer = "cb_2017_us_state_500k",
-                                                   verbose = FALSE),
-                                    sp::CRS("+proj=longlat +datum=WGS84"))
-
-state_border <- raster::crop(state_border, raster::extent(c(W.end, E.end, 30, 50)))
-state_border.df <- broom::tidy(state_border)
-
-p1 <- ggplot() + 
-  geom_polygon(data = data.frame(y = c(N.end, S.end, S.end, N.end, N.end),
-                                 x = c(W.end, W.end, E.end, E.end, W.end)),
-               aes(x = x, y = y),
-               fill = water.color,
-               alpha = 0.8) + 
-  geom_polygon(fill = land.color,
-               data = W.coast.df,
-               aes(x=long, y=lat, group = id),
-               alpha = 0.9) +  
-  geom_path(data = US_MX_border.df,
-            aes(x = long, y = lat, group = group),
-            color = border.color,
-            size = 0.5) + 
-  geom_path(data = US_Canada_border.df,
-            aes(x = long, y = lat, group = group),
-            color = border.color,
-            size = 0.5) + #coord_map()
-  geom_path(data = state_border.df,
-            aes(x = long, y = lat, group = group),
-            color = border.color,
-            size = 0.5) + #coord_map()
-  geom_path(data = data.frame(x = c(E.end, E.end), 
-                              y = c(S.end, N.end)),
-            aes(x = x, y = y),
-            color = land.color,
-            size = 1.2) +  
-  geom_point(data = dat0,
-             aes(x = Longitude, 
-                 y = Latitude,
-                 color = Species),
-             size = 2,
-             alpha = 0.5)  +
-  coord_map() +
-  xlim(c(-128, E.end))+
-  ylab(expression(paste("Latitude (", degree, "N)"))) +
-  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) 
-    
-if (save.fig)
-  ggsave(plot = p1,
-         device = "png",
-         dpi = 600,
-         filename = "figures/stranding_map.png")
-p1
-```
-
-We may remove those found south of Pt Conception, as Deena did (true?). But for now, keep them all. 
+Removed those found south of Pt Conception (34.45N), as Deena did (true?).  
 
 Look at size measurements:
 
@@ -254,11 +149,16 @@ latlon$Date <- dat0$Date
 sst <- sst_anom <- sst_sd <- sst_lag30d <- sst_anom_30d <- matrix(nrow = nrow(latlon),
                                                                   ncol = d.n)
 
+sst0125 <- sst0125_min <- sst0125_sd <-  matrix(nrow = nrow(latlon),
+                                                ncol = d.n)
+
 sst_min <- sst_min_lag30d <- air_temp <- air_temp_30d <- matrix(nrow = nrow(latlon),
                                                                 ncol = d.n)
+sst0125_lag30d <- sst0125_min_lag30d <- sst0125_sd_lag30d <- matrix(nrow = nrow(latlon),
+                                               ncol = d.n)
 
 wind <- wind_max <- wind_30d <- wind_max_30d <- matrix(nrow = nrow(latlon),
-                                           ncol = 1)
+                                                       ncol = 1)
 k <- k1 <- 1
 
 # for all rows
@@ -285,6 +185,11 @@ for (k in 1:nrow(sst)){
                                              ds[k1], "km_airtemp.nc")
     out.file.name.air.temp.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
                                              ds[k1], "km_airtemp_lag30d.nc")
+    out.file.name.sst.0125 <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_sst0125.nc")
+    out.file.name.sst.0125.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                             ds[k1], "km_sst0125_lag30d.nc")
+    
     
     xlim <- c(latlon[k, (4*k1 - 1)],
               latlon[k, (4*k1 + 1)])
@@ -292,35 +197,36 @@ for (k in 1:nrow(sst)){
               latlon[k, (4*k1 + 2)])
     #tlim <- c(latlon[k, "Date"] - 7,
     #          latlon[k, "Date"] + 7)
+  
+    datafileID <- nc_open(out.file.name.sst.0125)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+    mat <- ncvar_get(datafileID, varid = 'sst')
+    nc_close(datafileID)
     
-    if(!file.exists(out.file.name)){
+    sst0125[k, k1] <- mean(mat, na.rm = T)
+    sst0125_sd[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
+    sst0125_min[k, k1] <- min(mat, na.rm = T)
       
-      # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, Monthly
-      sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
-                       latlon[k, "Date"], "T00:00:00Z):1:(", 
-                       latlon[k, "Date"], "T00:00:00Z)][(", 
-                       signif(ylim[1], digits = 4), "):1:(", 
-                       signif(ylim[2], digits = 4), ")][(", 
-                       signif(xlim[1], digits = 5), "):1:(", 
-                       signif(xlim[2], digits = 5), ")]")
-
-      # Aqua MODIS, NPP, 4km, Daytime 2003-present (8 day composite)
-      # sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/erdMH1sstd8day.nc?sst[(", 
-      #                  latlon[k, "Date"], "T00:00:00Z):1:(", latlon[k, "Date"], ")][(", 
-      #                  ylim[2], "):1:(", ylim[1], "][(", 
-      #                  xlim[1], "):1:(", xlim[2], ")]")
-
-      test <- download.file(sstURL,
-                            destfile = out.file.name,
-                            mode='wb')
-      
-    }
+    datafileID <- nc_open(out.file.name.sst.0125.lag30d)
+    lon <- ncvar_get(datafileID, varid="longitude")
+    lat <- ncvar_get(datafileID, varid="latitude")
+    time <- ncvar_get(datafileID, varid="time")
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+    mat <- ncvar_get(datafileID, varid = 'sst')
+    nc_close(datafileID)
+    
+    sst0125_lag30d[k, k1] <- mean(mat, na.rm = T)
+    sst0125_sd_lag30d[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
+    sst0125_min_lag30d[k, k1] <- min(mat, na.rm = T)
     
     datafileID <- nc_open(out.file.name)
     lon <- ncvar_get(datafileID, varid="longitude")
     lat <- ncvar_get(datafileID, varid="latitude")
     time <- ncvar_get(datafileID, varid="time")
-    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  # true? check with nc files (5/30/2019)
+    time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
     mat <- ncvar_get(datafileID, varid = 'sst')
     nc_close(datafileID)
     
@@ -328,21 +234,6 @@ for (k in 1:nrow(sst)){
     sst_sd[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
     sst_min[k, k1] <- min(mat, na.rm = T)
     
-    if (!file.exists(out.file.name.anom)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
-      sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
-                           latlon[k, "Date"], "T00:00:00Z):1:(", 
-                           latlon[k, "Date"], "T00:00:00Z)][(", 
-                           signif(ylim[1], 4), "):1:(", 
-                           signif(ylim[2], 4), ")][(", 
-                           signif(xlim[1], 5), "):1:(", 
-                           signif(xlim[2], 5), ")]")
-      test <- download.file(sstanomURL,
-                            destfile = out.file.name.anom,
-                            mode='wb')
-      
-    }
-
     datafileID <- nc_open(out.file.name.anom)
     lon <- ncvar_get(datafileID, varid="longitude")
     lat <- ncvar_get(datafileID, varid="latitude")
@@ -352,22 +243,6 @@ for (k in 1:nrow(sst)){
     nc_close(datafileID)
     
     sst_anom[k, k1] <- mean(mat, na.rm = T)
-    
-    if (!file.exists(out.file.name.lag30d)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
-      sst30dURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
-                          (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
-                          (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
-                          signif(ylim[1], 4), "):1:(", 
-                          signif(ylim[2], 4), ")][(", 
-                          signif(xlim[1], 5), "):1:(", 
-                          signif(xlim[2], 5), ")]")
-
-      test <- download.file(sst30dURL,
-                            destfile = out.file.name.lag30d,
-                            mode='wb')
-      
-    }
     
     datafileID <- nc_open(out.file.name.lag30d)
     lon <- ncvar_get(datafileID, varid="longitude")
@@ -380,19 +255,6 @@ for (k in 1:nrow(sst)){
     sst_lag30d[k, k1] <- mean(mat, na.rm = T)
     sst_min_lag30d[k, k1] <- min(mat, na.rm = T)
   
-    if (!file.exists(out.file.name.anom.lag30d)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
-      sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
-                           (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
-                           (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
-                           signif(ylim[1], 4), "):1:(", signif(ylim[2], 4), ")][(", 
-                           signif(xlim[1], 5), "):1:(", signif(xlim[2], 5), ")]")
-      test <- download.file(sstanomURL,
-                            destfile = out.file.name.anom.lag30d,
-                            mode='wb')
-      
-    }
-
     datafileID <- nc_open(out.file.name.anom.lag30d)
     lon <- ncvar_get(datafileID, varid="longitude")
     lat <- ncvar_get(datafileID, varid="latitude")
@@ -403,79 +265,8 @@ for (k in 1:nrow(sst)){
     
     sst_anom_30d[k, k1] <- mean(mat, na.rm = T)
     
-    # havent' found good airtemp dataset yet.
-    # if (!file.exists(out.file.name.air.temp)){
-    #   # NOAA NOS SOS, Experimental, 1853-present, Air temperature
-    #   # (https://coastwatch.pfeg.noaa.gov/erddap/tabledap/nosSosATemp.html)
-    #   airtempURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/tabledap/nosSosATemp.nc?longitude%2Clatitude%2Ctime%2Cair_temperature%2Cquality_flags&longitude%3E=", 
-    #                        xlim[1], "&longitude%3C=", xlim[2], 
-    #                        "&latitude%3E=", ylim[1], "&latitude%3C=", ylim[2], 
-    #                        "&time%3E=", latlon[k, "Date"], 
-    #                        "T00%3A00%3A00Z&time%3C=", latlon[k, "Date"], "T00%3A00%3A00Z")
-    #   
-    #   test <- download.file(airtempURL,
-    #                         destfile = out.file.name.air.temp,
-    #                         mode='wb')
-    #   
-    #   datafileID <- nc_open(out.file.name.air.temp)
-    #   lon <- ncvar_get(datafileID, varid="longitude")
-    #   lat <- ncvar_get(datafileID, varid="latitude")
-    #   time <- ncvar_get(datafileID, varid="time")
-    #   time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
-    #   mat <- ncvar_get(datafileID, varid = '')
-    #   nc_close(datafileID)
-    #   
-    #   air_temp[k, k1] <- mean(mat, na.rm = T)
-    #   
-    #   
-    # }
-    
     
   }
-  if (!file.exists(out.file.name.wind)){
-    # wind speed and direction data end at 2018-10-09: 
-    
-    # NOAA/NCDC blended daily global 0.25-degree sea surface winds, 1987-2011, Lon +/-180 
-    # (https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOwDly_LonPM180.html)
-    
-    #longitude needs to be increments of 0.25 degrees:
-    # because we are always in the negative longitude values...
-    cut.off.lon <- c(0.75, 0.5, 0.25, 0)
-    dif.lon <- abs(trunc(latlon[k, "X"]) - cut.off.lon - latlon[k, "X"])
-    X.cut.off <- trunc(latlon[k, "X"]) - cut.off.lon[dif.lon == min(dif.lon)]
-    X.min <- ifelse(X.cut.off >= latlon[k, "X"], X.cut.off - 0.25, X.cut.off)
-    X.max <- X.min + 0.25
-    
-    # and latitude is always positive in our case
-    cut.off.lat <- c(0, 0.25, 0.5, 0.75)
-    dif.lat <- abs(latlon[k, "Y"] - cut.off.lat - latlon[k, "Y"])
-    Y.cut.off <- trunc(latlon[k, "Y"]) - cut.off.lat[dif.lat == min(dif.lat)]
-    Y.min <- ifelse(Y.cut.off >= latlon[k, "Y"], Y.cut.off - 0.25, Y.cut.off)
-    Y.max <- Y.min + 0.25
-    
-    if (lubridate::year(latlon[k, "Date"]) < 2011){
-      var.name <- "ncdcOwDly"
-    } else {
-      var.name <-"ncdcOwDlyP" 
-       
-    }
-
-    if (latlon[k, "Date"] < as.Date("2018-10-10")){
-      windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, "_LonPM180.nc?u[(",
-                        latlon[k, "Date"], "T09:00:00Z):1:(", latlon[k, "Date"],
-                        "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
-                        X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"], "T09:00:00Z):1:(", 
-                        latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
-                        Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"],
-                        "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
-                        Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
-      
-      test <- download.file(windURL,
-                            destfile = out.file.name.wind,
-                            mode='wb')
-  
-    }
-  }  
 
   if (latlon[k, "Date"] < as.Date("2018-10-10")){
     datafileID <- nc_open(out.file.name.wind)
@@ -496,96 +287,6 @@ for (k in 1:nrow(sst)){
   #wind_u[k, 1] <- mean(u, na.rm = T)
   #wind_v[k, 1] <- mean(v, na.rm = T)
   
-  
-  if (!file.exists(out.file.name.wind.30d)){
-    # wind speed and direction data end at 2018-10-09: 
-    
-    # NOAA/NCDC blended daily global 0.25-degree sea surface winds, 1987-2011, Lon +/-180 
-    # (https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOwDly_LonPM180.html)
-    
-    #longitude needs to be increments of 0.25 degrees:
-    # because we are always in the negative longitude values...
-    cut.off.lon <- c(0.75, 0.5, 0.25, 0)
-    dif.lon <- abs(trunc(latlon[k, "X"]) - cut.off.lon - latlon[k, "X"])
-    X.cut.off <- trunc(latlon[k, "X"]) - cut.off.lon[dif.lon == min(dif.lon)]
-    X.min <- ifelse(X.cut.off >= latlon[k, "X"], X.cut.off - 0.25, X.cut.off)
-    X.max <- X.min + 0.25
-    
-    # and latitude is always positive in our case
-    cut.off.lat <- c(0, 0.25, 0.5, 0.75)
-    dif.lat <- abs(latlon[k, "Y"] - cut.off.lat - latlon[k, "Y"])
-    Y.cut.off <- trunc(latlon[k, "Y"]) - cut.off.lat[dif.lat == min(dif.lat)]
-    Y.min <- ifelse(Y.cut.off >= latlon[k, "Y"], Y.cut.off - 0.25, Y.cut.off)
-    Y.max <- Y.min + 0.25
-    
-    if (latlon[k, "Date"] < as.Date("2011-10-01")){
-      var.name <- "ncdcOwDly" # to 2011-09-30
-      windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, "_LonPM180.nc?u[(",
-                        latlon[k, "Date"]-29, "T09:00:00Z):1:(", latlon[k, "Date"],
-                        "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
-                        X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29, "T09:00:00Z):1:(", 
-                        latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
-                        Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
-                        "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
-                        Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
-      
-      test <- download.file(windURL,
-                            destfile = out.file.name.wind.30d,
-                            mode='wb')
-    } else {
-      var.name <-"ncdcOwDlyP" # from 2011-10-01
-      if((latlon[k, "Date"] - 30) < as.Date("2011-10-01")){
-        var.name.2 <- "ncdcOwDly"
-        windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name.2,
-                          "_LonPM180.nc?u[(",
-                          latlon[k, "Date"]-29, 
-                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(",
-                          Y.min, "):1:(", Y.max, ")][(", 
-                          X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29,
-                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
-                          Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
-                          "T09:00:00Z):1:(2011-09-30T09:00:00Z)][(10.0):1:(10.0)][(", 
-                          Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
-        
-        test <- download.file(windURL,
-                              destfile = paste0(unlist(out.file.name.wind.30d, "\\.nc"), "_dat1.nc"),
-                              mode='wb')
-        
-        windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name, 
-                          "_LonPM180.nc?u[(2011-10-01T09:00:00Z):1:(", latlon[k, "Date"],
-                          "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
-                          X.min, "):1:(", X.max, ")],v[(2011-10-01T09:00:00Z):1:(", 
-                          latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
-                          Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(2011-10-01T09:00:00Z):1:(",
-                          latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
-                          Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
-        
-        test <- download.file(windURL,
-                              destfile = out.file.name.wind.30d,
-                              mode='wb')
-      } else {
-        if (latlon[k, "Date"] < as.Date("2018-10-10")){
-          
-          windURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/", var.name,
-                            "_LonPM180.nc?u[(",
-                            latlon[k, "Date"]-29, "T09:00:00Z):1:(", latlon[k, "Date"],
-                            "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", Y.max, ")][(", 
-                            X.min, "):1:(", X.max, ")],v[(", latlon[k, "Date"]-29, "T09:00:00Z):1:(", 
-                            latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", Y.min, "):1:(", 
-                            Y.max, ")][(", X.min, "):1:(", X.max, ")],w[(", latlon[k, "Date"]-29,
-                            "T09:00:00Z):1:(", latlon[k, "Date"], "T09:00:00Z)][(10.0):1:(10.0)][(", 
-                            Y.min, "):1:(", Y.max, ")][(", X.min, "):1:(", X.max, ")]")
-          
-          test <- download.file(windURL,
-                                destfile = out.file.name.wind.30d,
-                                mode='wb')
-        }
-      }
-      
-      
-    }
-  }
-    
   if (((latlon[k, "Date"] > as.Date("2011-09-30")) & 
        (latlon[k, "Date"] - 30) < as.Date("2011-10-01"))){
     
@@ -677,10 +378,28 @@ sst.lag30d.df <- data.frame(sst_lag30d)
 colnames(sst.lag30d.df) <- c("SST_1_lag30", "SST_2_lag30", "SST_3_lag30")
 
 sst.min.lag30d.df <- data.frame(sst_min_lag30d)
-colnames(sst.lag30d.df) <- c("SST_1_min_lag30", "SST_2_min_lag30", "SST_3_min_lag30")
+colnames(sst.min.lag30d.df) <- c("SST_1_min_lag30", "SST_2_min_lag30", "SST_3_min_lag30")
 
 sst.anom.lag30d.df <- data.frame(sst_anom_30d)
 colnames(sst.anom.lag30d.df) <- c("SST_1_ANOM_lag30", "SST_2_ANOM_lag30", "SST_3_ANOM_lag30")
+
+sst0125.df <- data.frame(sst0125)
+colnames(sst0125.df) <- c("SST0125_1", "SST0125_2", "SST0125_3")
+
+sst0125.sd.df <- data.frame(sst0125_sd)
+colnames(sst0125.sd.df) <- c("SST0125_1_SD", "SST0125_2_SD", "SST0125_3_SD")
+
+sst0125.min.df <- data.frame(sst0125_min)
+colnames(sst0125.min.df) <- c("SST0125_1_min", "SST0125_2_min", "SST0125_3_min")
+
+sst0125.lag30d.df <- data.frame(sst0125_lag30d)
+colnames(sst0125.lag30d.df) <- c("SST0125_1_lag30d", "SST0125_2_lag30d", "SST0125_3_lag30d")
+
+# sst0125.lag30d.sd.df <- data.frame(sst0125_sd_lag30d)
+# colnames(sst0125.lag30d.sd.df) <- c("SST0125_1_SD", "SST0125_2_SD", "SST0125_3_SD")
+
+sst0125.lag30d.min.df <- data.frame(sst0125_min_lag30d)
+colnames(sst0125.lag30d.df) <- c("SST0125_1_min_lag30", "SST0125_2_min_lag30", "SST0125_3_min_lag30")
 
 wind.df <- data.frame(wind)
 
@@ -691,13 +410,14 @@ dat1 <- cbind(dat0,
               sst.lag30d.df, 
               sst.min.lag30d.df, 
               sst.sd.df, 
-              sst.anom.lag30d.df) %>%
+              sst.anom.lag30d.df,
+              sst0125.df) %>%
   mutate(SST_1_CV = SST_1_SD/SST_1,
          SST_2_CV = SST_2_SD/SST_2,
          SST_3_CV = SST_3_SD/SST_3)
 
 p4 <- ggplot(data = dat1) + 
-  geom_point(aes(x = SST_1_min, 
+  geom_point(aes(x = SST_3_min, 
                  y = Body_Temp_C, 
                  size = CCL_cm)) +
   xlim(c(9, 12))
@@ -866,38 +586,186 @@ month[MEI.v2.long$period == "ND"] <- 12
 MEI.v2.long$month <- month
 MEI.v2.long$year.month.num <- MEI.v2.long$Year + MEI.v2.long$month/12
 
-MEI.v2.long <- arrange(MEI.v2.long, Year)
-
-MEI.v2.lag1yr.long <- cbind(Year = MEI.v2.long$Year[13:nrow(MEI.v2.long)],
-                            MEI.v2.long[1:(nrow(MEI.v2.long)-12), 2:ncol(MEI.v2.long)])
-
-MEI.v2.lag6mo.long <- cbind(Year = MEI.v2.long$Year[7:nrow(MEI.v2.long)],
-                            MEI.v2.long[1:(nrow(MEI.v2.long)-6), 2:ncol(MEI.v2.long)])
+MEI.v2.long <- arrange(MEI.v2.long, Year) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
 
 MEI.v2.long %>% 
-  mutate(year.month = paste(Year, month, sep = ".")) -> MEI.v2.long
+  group_by(Year) %>%
+  summarize(mean.MEI = mean(MEI.v2),
+            SD.MEI = sqrt(var(MEI.v2, na.rm = T)),
+            min.MEI = min(MEI.v2, na.rm = T),
+            max.MEI = max(MEI.v2, na.rm = T)) -> MEI.v2.byYr
 
-MEI.v2.lag1yr.long %>% 
-  mutate(year.month = paste(Year, month, sep = ".")) %>%
-  rename(MEI.v2.lag1yr = MEI.v2) -> MEI.v2.lag1yr.long
+MEI.v2.lag1yr.long <- data.frame(Year = MEI.v2.long$Year[13:nrow(MEI.v2.long)],
+                                 month = MEI.v2.long$month[13:nrow(MEI.v2.long)],
+                                 MEI.v2.lag1yr = MEI.v2.long$MEI.v2[1:(nrow(MEI.v2.long)-12)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
+
+MEI.v2.lag1yr.byYr <- MEI.v2.lag1yr.long %>%
+  group_by(Year) %>%
+  summarize(mean.MEI.lag1yr = mean(MEI.v2.lag1yr),
+            SD.MEI.lag1yr = sqrt(var(MEI.v2.lag1yr, na.rm = T)),
+            min.MEI.lag1yr = min(MEI.v2.lag1yr, na.rm = T),
+            max.MEI.lag1yr = max(MEI.v2.lag1yr, na.rm = T))
+
+
+MEI.v2.lag6mo.long <- data.frame(Year = MEI.v2.long$Year[7:nrow(MEI.v2.long)],
+                                 month = MEI.v2.long$month[7:nrow(MEI.v2.long)],
+                                 MEI.v2.lag6mo = MEI.v2.long$MEI.v2[1:(nrow(MEI.v2.long)-6)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
 
 MEI.v2.lag6mo.long %>% 
-  mutate(year.month = paste(Year, month, sep = ".")) %>%
-  rename(MEI.v2.lag6mo = MEI.v2) -> MEI.v2.lag6mo.long
+  group_by(Year) %>%
+  summarize(mean.MEI.lag6mo = mean(MEI.v2.lag6mo),
+            SD.MEI.lag6mo = sqrt(var(MEI.v2.lag6mo, na.rm = T)),
+            min.MEI.lag6mo = min(MEI.v2.lag6mo, na.rm = T),
+            max.MEI.lag6mo = max(MEI.v2.lag6mo, na.rm = T)) -> MEI.v2.lag6mo.byYr
 
-dat1 %>% mutate(year.month = paste(lubridate::year(Date),
+
+```
+
+Pull in PDO
+```{r}
+PDO <-  fread(file = "data/PDO_notext_20190605.txt")
+PDO.long <- melt(PDO, 
+                 id.vars = "YEAR", 
+                 value.name = "PDO",
+                 variable.name = "Month")
+
+month <- vector(mode = "numeric", length = nrow(PDO.long))
+
+month[PDO.long$Month == "JAN"] <- 1
+month[PDO.long$Month == "FEB"] <- 2
+month[PDO.long$Month == "MAR"] <- 3
+month[PDO.long$Month == "APR"] <- 4
+month[PDO.long$Month == "MAY"] <- 5
+month[PDO.long$Month == "JUN"] <- 6
+month[PDO.long$Month == "JUL"] <- 7
+month[PDO.long$Month == "AUG"] <- 8
+month[PDO.long$Month == "SEP"] <- 9
+month[PDO.long$Month == "OCT"] <- 10
+month[PDO.long$Month == "NOV"] <- 11
+month[PDO.long$Month == "DEC"] <- 12
+
+PDO.long$month <- month
+
+arrange(PDO.long, YEAR) %>% 
+  mutate(year.month = paste(YEAR, month, sep = "."),
+         Year = YEAR) -> PDO.long
+
+PDO.long %>% 
+  group_by(Year) %>%
+  summarize(mean.PDO = mean(PDO, na.rm = T),
+            SD.PDO = sqrt(var(PDO, na.rm = T)),
+            min.PDO = min(PDO, na.rm = T),
+            max.PDO = max(PDO, na.rm = T)) -> PDO.byYr
+
+PDO.lag1yr <- data.frame(Year = PDO.long$Year[13:nrow(PDO.long)],
+                         month = PDO.long$month[13:nrow(PDO.long)],
+                         PDO.lag1yr = PDO.long$PDO[1:(nrow(PDO.long)-12)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
+
+PDO.lag6mo <- data.frame(Year = PDO.long$Year[7:nrow(PDO.long)],
+                         month = PDO.long$month[7:nrow(PDO.long)],
+                         PDO.lag6mo = PDO.long$PDO[1:(nrow(PDO.long)-6)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
+
+
+PDO.lag1yr.byYr <- PDO.lag1yr %>%
+  group_by(Year) %>%
+  summarize(mean.PDO.lag1yr = mean(PDO.lag1yr),
+            SD.PDO.lag1yr = sqrt(var(PDO.lag1yr, na.rm = T)),
+            min.PDO.lag1yr = min(PDO.lag1yr, na.rm = T),
+            max.PDO.lag1yr = max(PDO.lag1yr, na.rm = T))
+
+PDO.lag6mo.byYr <- PDO.lag6mo %>%
+  group_by(Year) %>%
+  summarize(mean.PDO.lag6mo = mean(PDO.lag6mo),
+            SD.PDO.lag6mo = sqrt(var(PDO.lag6mo, na.rm = T)),
+            min.PDO.lag6mo = min(PDO.lag6mo, na.rm = T),
+            max.PDO.lag6mo = max(PDO.lag6mo, na.rm = T))
+
+```
+
+ONI:
+```{r}
+# data are from here - there are several versions on the Internet and they are slightly different...
+# https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/detrend.nino34.ascii.txt
+ONI <- fread(file = "data/ONI_20190605.txt")
+
+arrange(ONI, YR) %>%
+  mutate(year.month = paste(YR, MON, sep = "."),
+         Year = YR) -> ONI.long
+
+ONI.long %>%
+  group_by(Year) %>%
+  summarise(mean.ONI = mean(ANOM, na.rm = T),
+            SD.ONI = sqrt(var(ANOM, na.rm = T)),
+            min.ONI = min(ANOM, na.rm = T),
+            max.ONI = max(ANOM, na.rm = T)) -> ONI.byYr
+
+ONI.lag1yr <- data.frame(Year = ONI.long$Year[13:nrow(ONI.long)],
+                         month = ONI.long$MON[13:nrow(ONI.long)],
+                         ONI.lag1yr = ONI.long$ANOM[1:(nrow(ONI.long)-12)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
+
+ONI.lag6mo <- data.frame(Year = ONI.long$Year[7:nrow(ONI.long)],
+                         month = ONI.long$MON[7:nrow(ONI.long)],
+                         ONI.lag6mo = ONI.long$ANOM[1:(nrow(ONI.long)-6)]) %>% 
+  mutate(year.month = paste(Year, month, sep = "."))
+
+ONI.lag1yr.byYr <- ONI.lag1yr %>%
+  group_by(Year) %>%
+  summarize(mean.ONI.lag1yr = mean(ONI.lag1yr),
+            SD.ONI.lag1yr = sqrt(var(ONI.lag1yr, na.rm = T)),
+            min.ONI.lag1yr = min(ONI.lag1yr, na.rm = T),
+            max.ONI.lag1yr = max(ONI.lag1yr, na.rm = T))
+
+ONI.lag6mo.byYr <- ONI.lag6mo %>%
+  group_by(Year) %>%
+  summarize(mean.ONI.lag6mo = mean(ONI.lag6mo),
+            SD.ONI.lag6mo = sqrt(var(ONI.lag6mo, na.rm = T)),
+            min.ONI.lag6mo = min(ONI.lag6mo, na.rm = T),
+            max.ONI.lag6mo = max(ONI.lag6mo, na.rm = T))
+
+```
+
+
+
+Combine together
+
+```{r}
+dat1 %>% mutate(Year = lubridate::year(Date),
+                year.month = paste(lubridate::year(Date),
                                    lubridate::month(Date),
                                    sep = ".")) -> dat1
 
-dat1.MEI <- left_join(dat1, MEI.v2.long, by = "year.month")
-dat1.MEI.lag1yr <- left_join(dat1, MEI.v2.lag1yr.long, by = "year.month")
-dat1.MEI.lag6mo <- left_join(dat1, MEI.v2.lag6mo.long, by = "year.month")
+left_join(dat1, MEI.v2.long) %>%
+  left_join(MEI.v2.lag1yr.long)%>%
+  left_join(MEI.v2.lag6mo.long) %>%
+  left_join(MEI.v2.byYr) %>%
+  left_join(MEI.v2.lag1yr.byYr) %>%
+  left_join(MEI.v2.lag6mo.byYr) %>%
+  left_join(PDO.long) %>%
+  left_join(PDO.lag1yr) %>%
+  left_join(PDO.lag6mo) %>%
+  left_join(PDO.byYr) %>%
+  left_join(PDO.lag1yr.byYr) %>%
+  left_join(PDO.lag6mo.byYr) %>%
+  left_join(ONI.long) %>%
+  left_join(ONI.lag1yr) %>%
+  left_join(ONI.lag6mo) %>%
+  left_join(ONI.byYr) %>%
+  left_join(ONI.lag1yr.byYr) %>%
+  left_join(ONI.lag6mo.byYr) -> dat1.oce
+
 ```
+
 
 How does the MEI values play a role in strandings?
 
 ```{r}
-p12 <- ggplot(data = dat1.MEI) + 
+p12 <- ggplot(data = dat1.oce) + 
   geom_point(aes(x = Date, 
                  y = MEI.v2, 
                  color = Species),
@@ -915,7 +783,7 @@ p12
 So, the strandings during 2015 and early 2016 might have been affected by positive MEI values - possibly in the northern region?  Next plot adds latitude to this plot and size information is dropped.
 
 ```{r}
-p13 <- ggplot(data = dat1.MEI) + 
+p13 <- ggplot(data = dat1.oce) + 
   geom_point(aes(x = Date, 
                  y = MEI.v2, 
                  color = Species, 
@@ -935,7 +803,7 @@ What if we lag MEI by 6 months or 1 year?
 
 ```{r}
 
-p14 <- ggplot(data = dat1.MEI.lag1yr) + 
+p14 <- ggplot(data = dat1.oce) + 
   geom_point(aes(x = Date, 
                  y = MEI.v2.lag1yr, 
                  color = Species, 
@@ -952,7 +820,7 @@ p14
 
 ```{r}
 
-p15 <- ggplot(data = dat1.MEI.lag6mo) + 
+p15 <- ggplot(data = dat1.oce) + 
   geom_point(aes(x = Date, 
                  y = MEI.v2.lag6mo, 
                  color = Species, 
@@ -971,11 +839,10 @@ How did the MEI change over time?
 
 ```{r}
 ggplot() + 
-  geom_point(data = filter(MEI.v2.lag1yr.long, 
-                           Year > 2009),
+  geom_point(data = filter(MEI.v2.long, Year > 2008),
              aes(x = year.month.num,
-                 y = MEI.v2.lag1yr)) + 
-  geom_point(data = dat1.MEI,
+                 y = MEI.v2)) + 
+  geom_point(data = dat1.oce,
              aes(x = year.month.num,
                  y = 0,
                  color = Species),
@@ -985,9 +852,9 @@ ggplot() +
 # strandings per year? 
 
 ```{r}
-dat1.MEI %>% filter(Year > 2009) %>%
+dat1.oce %>% 
   group_by(Year) %>%
-  summarise(mean.MEI = mean(MEI.v2),
+  summarise(mean.MEI = mean(mean.MEI),
          n = n()) -> dat1.MEI.byYr
 
 ggplot(dat1.MEI.byYr) + 
@@ -996,10 +863,9 @@ ggplot(dat1.MEI.byYr) +
 
 
 ```{r}
-dat1.MEI.lag1yr %>% 
-  filter(Year > 2009) %>%
+dat1.oce %>% 
   group_by(Year) %>%
-  summarise(mean.MEI.lag1yr = mean(MEI.v2.lag1yr),
+  summarise(mean.MEI.lag1yr = mean(mean.MEI.lag1yr),
          n = n()) -> dat1.MEI.lag1yr.byYr
 
 ggplot(dat1.MEI.lag1yr.byYr) + 
@@ -1008,13 +874,91 @@ ggplot(dat1.MEI.lag1yr.byYr) +
 
 
 ```{r}
-dat1.MEI.lag6mo %>% 
-  filter(Year > 2009) %>%
+dat1.oce %>%
   group_by(Year) %>%
-  summarise(mean.MEI.lag6mo = mean(MEI.v2.lag6mo),
+  summarise(mean.MEI.lag6mo = mean(mean.MEI.lag6mo),
          n = n()) -> dat1.MEI.lag6mo.byYr
 
 ggplot(dat1.MEI.lag6mo.byYr) + 
   geom_point(aes(x = mean.MEI.lag6mo, y = n, color = Year), size = 3)
+```
+
+What if we just looked at one species?
+
+```{r}
+dat1.oce %>% filter(Species == "LO") %>% 
+  group_by(Year) %>%
+  summarise(mean.MEI.lag6mo = mean(mean.MEI.lag6mo),
+            mean.MEI.lag1yr = mean(mean.MEI.lag1yr),
+            n = n()) -> dat1.MEI.LO.lag
+
+ggplot(dat1.MEI.LO.lag) + 
+  geom_point(aes(x = mean.MEI.lag6mo, y = n, color = Year), size = 3)
+
+ggplot(dat1.MEI.LO.lag) + 
+  geom_point(aes(x = mean.MEI.lag1yr, y = n, color = Year), size = 3)
+
+```
+
+
+```{r}
+dat1.oce %>% filter(Species == "LO") %>% 
+  group_by(Year) %>%
+  summarise(mean.PDO.lag6mo = mean(mean.PDO.lag6mo),
+            mean.PDO.lag1yr = mean(mean.PDO.lag1yr),
+            n = n()) -> dat1.PDO.LO.lag
+
+ggplot(dat1.PDO.LO.lag) + 
+  geom_point(aes(x = mean.PDO.lag6mo, y = n, color = Year), size = 3)
+
+ggplot(dat1.PDO.LO.lag) + 
+  geom_point(aes(x = mean.PDO.lag1yr, y = n, color = Year), size = 3)
+
+```
+
+
+
+
+```{r}
+dat1.oce %>% filter(Species == "LO") %>% 
+  group_by(Year) %>%
+  summarise(mean.ONI.lag6mo = mean(mean.ONI.lag6mo),
+            mean.ONI.lag1yr = mean(mean.ONI.lag1yr),
+            n = n()) -> dat1.ONI.LO.lag
+
+ggplot(dat1.ONI.LO.lag) + 
+  geom_point(aes(x = mean.ONI.lag6mo, y = n, color = Year), size = 3)
+
+ggplot(dat1.ONI.LO.lag) + 
+  geom_point(aes(x = mean.ONI.lag1yr, y = n, color = Year), size = 3)
+
+```
+
+put together all potential oceanographic variables here for each year - thinking about some sort of regression analysis for the number of stranding per year as the response. 
+```{r}
+dat1.oce %>% #mutate(f.Year = factor(Year)) %>%
+  group_by(Year, Species) %>%
+  summarise(n = n()) %>%
+  complete(Species, fill = list(n = 0)) %>%
+  left_join(MEI.v2.byYr) %>%
+  left_join(MEI.v2.lag1yr.byYr) %>%
+  left_join(MEI.v2.lag6mo.byYr) %>%
+  left_join(ONI.byYr) %>%
+  left_join(ONI.lag1yr.byYr) %>%
+  left_join(ONI.lag6mo.byYr) %>%
+  left_join(PDO.byYr) %>% 
+  left_join(PDO.lag1yr.byYr) %>% 
+  left_join(PDO.lag6mo.byYr) -> dat1.oce.sp
+
+
+```
+
+Quick regression
+```{r}
+# need to use species as covariate? but there are only three Cc strandings... not useful? 
+fit.1 <- glm(n ~ max.MEI + max.ONI + max.PDO + max.MEI.lag6mo + max.ONI.lag6mo + max.PDO.lag6mo, 
+             family = poisson, data = dat1.oce.sp)
+
+summary(fit.1)
 ```
 
