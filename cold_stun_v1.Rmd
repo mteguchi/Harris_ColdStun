@@ -342,7 +342,6 @@ for (k in 1:nrow(sst)){
 
 ```
 
-We also need the background temperature data for the time period?
 
 Change in body size over time?
 ```{r}
@@ -358,6 +357,20 @@ if (save.fig)
 p
 ```
 
+Small sample sizes don't let me say too much about greens or loggerheads.  Olive ridleys may be getting a bit smaller? 
+
+```{r}
+dat0 %>% filter(Species == "LO") %>% 
+  mutate(days = as.numeric(Date - min(Date))) -> dat0.LO
+
+fit.LO.CCL <- lm(CCL_cm ~ days, data = dat0.LO)
+summary(fit.LO.CCL)
+
+```
+
+NOt really... There is a "significant" negative relationship but not sure if this is just a result of randomness with the small sample size... 
+
+Next, I look at effects of oceanographic variables on the number of strandings per year.  Note that this time definition is rather arbitrary (per year).  I probably should look into the number of strandings per oceanographic "season."  I'll do that later... for now, just year as a factor. 
 
 Once data are downloaded, combine it with the original dataset.  CCL was not measured for 3 with body temperature... kinda odd? Only ridleys are available... 
 
@@ -954,11 +967,274 @@ dat1.oce %>% #mutate(f.Year = factor(Year)) %>%
 ```
 
 Quick regression
+Look at the collinearity among various oceanographic indices first.
+
 ```{r}
-# need to use species as covariate? but there are only three Cc strandings... not useful? 
-fit.1 <- glm(n ~ max.MEI + max.ONI + max.PDO + max.MEI.lag6mo + max.ONI.lag6mo + max.PDO.lag6mo, 
-             family = poisson, data = dat1.oce.sp)
+# from here: http://www.sthda.com/english/wiki/ggplot2-quick-correlation-matrix-heatmap-r-software-and-data-visualization
+cormat <- round(cor(select(ungroup(dat1.oce.sp), -c(Year, Species, n))), 2)
+cormat[lower.tri(cormat)] <- NA
+melted_cormat <- melt(cormat)
+
+ggplot(data = melted_cormat, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+```
+Kinda difficult to see them all... separate them out by index
+
+```{r}
+cormat_PDO <- round(cor(select(ungroup(dat1.oce.sp), contains("PDO"))), 2)
+cormat_PDO[lower.tri(cormat_PDO)] <- NA
+
+melted_cormat_PDO <- melt(cormat_PDO)
+
+ggplot(data = melted_cormat_PDO, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+
+```
+
+mean.PDO is correlated with pretty much all except SD.PDO, SD.PDO.lag6mo, and SD.PDO.lag1yr. I'll use mean.PDO, and three other SD measures (.PDO, .lag6mo, and .lag1yr).
+
+```{r}
+cormat_ONI <- round(cor(select(ungroup(dat1.oce.sp), contains("ONI"))), 2)
+cormat_ONI[lower.tri(cormat_ONI)] <- NA
+
+melted_cormat_ONI <- melt(cormat_ONI)
+
+ggplot(data = melted_cormat_ONI, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+```
+
+mean.ONI is not correlated with any other except possibly min.ONI and max.ONI.  So, I'll take mean.ONI, mean.ONI.lag6mo, and SD.ONI.lag1yr.
+
+
+```{r}
+cormat_MEI <- round(cor(select(ungroup(dat1.oce.sp), contains("MEI"))), 2)
+cormat_MEI[lower.tri(cormat_MEI)] <- NA
+
+melted_cormat_MEI <- melt(cormat_MEI)
+
+ggplot(data = melted_cormat_MEI, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+```
+
+MEI is similar to ONI; mean.MEI is somewhat correalted with min.MEI, max.MEI, min.MEI.lag6mo, and max.MEI.lag6mo. I select mean.MEI, max.MEI.lag1yr, and SD.MEI.lag6mo.
+
+See how indices correlate now.
+```{r}
+cormat_oce <- round(cor(select(ungroup(dat1.oce.sp), c("mean.PDO", 
+                                                       "SD.PDO", 
+                                                       "SD.PDO.lag6mo", 
+                                                       "SD.PDO.lag1yr",
+                                                       "mean.ONI", 
+                                                       "mean.ONI.lag6mo",  
+                                                       "SD.ONI.lag1yr",
+                                                       "mean.MEI", "max.MEI.lag1yr", 
+                                                       "SD.MEI.lag6mo"))))
+cormat_oce[lower.tri(cormat_oce)] <- NA
+
+melted_cormat_oce <- melt(cormat_oce)
+
+ggplot(data = melted_cormat_oce, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+
+```
+
+Strong correlations for mean.PDO and others, mean.MEI and others, SD.MEI.lag6mo and others.  Drop those... 
+
+```{r}
+cormat_oce <- round(cor(select(ungroup(dat1.oce.sp), c("SD.PDO", 
+                                                       "SD.PDO.lag6mo", 
+                                                       "SD.PDO.lag1yr",
+                                                       "mean.ONI", 
+                                                       "mean.ONI.lag6mo",  
+                                                       "SD.ONI.lag1yr",
+                                                       "max.MEI.lag1yr"))))
+cormat_oce[lower.tri(cormat_oce)] <- NA
+
+melted_cormat_oce <- melt(cormat_oce)
+
+ggplot(data = melted_cormat_oce, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+```
+
+SD.ONI.lag1yr is strongly correlated (negative and positive, respectively) with SD.PDO.lag6mo and SD.PDO.lag1yr/max.MEI.lag1yr, so remove it.  
+
+```{r}
+cormat_oce <- round(cor(select(ungroup(dat1.oce.sp), c("SD.PDO", 
+                                                       "SD.PDO.lag6mo", 
+                                                       "SD.PDO.lag1yr",
+                                                       "mean.ONI", 
+                                                       "mean.ONI.lag6mo",
+                                                       "max.MEI.lag1yr"))))
+cormat_oce[lower.tri(cormat_oce)] <- NA
+
+melted_cormat_oce <- melt(cormat_oce)
+
+ggplot(data = melted_cormat_oce, 
+       aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab",
+                       name = "Pearson\nCorrelation") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(x = "", y = "")
+```
+
+They now all look good.  Use these variables to look at the number of strandings per year. 
+
+```{r}
+dat1.oce.sp %>% select(n, Year, Species, SD.PDO, SD.PDO.lag6mo, SD.PDO.lag1yr, 
+                       mean.ONI, mean.ONI.lag6mo, max.MEI.lag1yr) -> dat1.oce.sp.1
+
+library(lme4)
+
+# there are only three Cc strandings... not useful? 
+fit.1 <- glmer(n ~ SD.PDO + SD.PDO.lag6mo + SD.PDO.lag1yr + mean.ONI + mean.ONI.lag6mo + max.MEI.lag1yr + (1 | Species), 
+             family = poisson, data = dat1.oce.sp.1)
 
 summary(fit.1)
 ```
 
+Because there were only three strandings of Cc, I remove them from the data
+
+```{r}
+dat1.oce.sp.2 <- filter(dat1.oce.sp.1, Species != "CC")
+
+fit.2 <- glmer(n ~ SD.PDO + SD.PDO.lag6mo + SD.PDO.lag1yr + mean.ONI + mean.ONI.lag6mo + max.MEI.lag1yr + (1 | Species), 
+             family = poisson, data = dat1.oce.sp.2)
+
+summary(fit.2)
+
+```
+
+Only mean.ONI seems to be a somewhat useful variable, which positively affected the strandings - then again, the sample size is quite small... 
+
+```{r}
+ggplot(data = dat1.oce.sp.2) + 
+  geom_point(aes(x = mean.ONI, y = n, color = Species),
+             size = 3)
+```
+
+
+
+Going back to this idea of how oceanographic seasons may be affecting the number of strandings... I need to define "seasons," which may or may not correspond to year/month.  
+
+ONI:
+```{r}
+ONI %>%  
+  mutate(year.month = paste(YR, MON, sep = ".")) %>%
+  transmute(ONI.anom = ANOM,
+            year.month = year.month,
+            Year = YR,
+            Date = as.Date(paste(YR, MON, 15, sep = "-")))-> ONI.1
+
+dat1 %>% left_join(select(ONI.1, c(ONI.anom, year.month)), 
+                   by = "year.month") -> dat1.1
+
+ggplot() +
+  geom_path(data = filter(ONI.1, Year > 2008),
+            aes(x = Date, y = ONI.anom)) + 
+  geom_point(data = dat1.1,
+             aes(x = Date, y = ONI.anom, color = Species),
+             size = 3)
+
+```
+
+
+MEI:
+```{r}
+MEI.v2.long <- mutate(MEI.v2.long, 
+                      Date = as.Date(paste(Year, month, 15, sep = "-")))
+
+dat1.1 %>% left_join(select(MEI.v2.long, c(MEI.v2, year.month)), 
+                   by = "year.month") -> dat1.1
+
+ggplot() +
+  geom_path(data = filter(MEI.v2.long, Year > 2008),
+            aes(x = Date, y = MEI.v2)) + 
+  geom_point(data = dat1.1,
+             aes(x = Date, y = MEI.v2, color = Species),
+             size = 3)
+
+```
+
+
+
+PDO:
+```{r}
+PDO.long %>%  
+  transmute(PDO.anom = PDO,
+            year.month = year.month,
+            Year = YEAR,
+            Date = as.Date(paste(YEAR, month, 15, sep = "-")))-> PDO.1
+
+dat1.1 %>% left_join(select(PDO.1, c(PDO.anom, year.month)), 
+                   by = "year.month") -> dat1.1
+
+ggplot() +
+  geom_path(data = filter(PDO.1, Year > 2008),
+            aes(x = Date, y = PDO.anom)) + 
+  geom_point(data = dat1.1,
+             aes(x = Date, y = PDO.anom, color = Species),
+             size = 3)
+
+```
+
+plot them all in one figure
+```{r}
+ggplot() +
+  geom_path(data = filter(PDO.1, Year > 2008),
+            aes(x = Date, y = PDO.anom),
+            color = "red",
+            size = 2) + 
+  geom_path(data = filter(MEI.v2.long, Year > 2008),
+            aes(x = Date, y = MEI.v2),
+            color = "blue",
+            size = 2) + 
+  geom_path(data = filter(ONI.1, Year > 2008),
+            aes(x = Date, y = ONI.anom),
+            color = "yellow",
+            size = 2)
+#  geom_vline(data = dat1.1,
+#             aes(xintercept = Date, color = Species),
+#             size = 1)
+```
+
+For the most part, MEI and ONI are similar (yellow and blue) but PDO is a bit different, which makes sense.  MEI and ONI both measure likelihood of El Nino, whereas PDO is a bit more larger scale. So, makes sense to look at one of MEI/ONI and PDO.  
+
+I wonder if these three indices may somehow linearly explain the strandings? 
