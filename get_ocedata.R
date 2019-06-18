@@ -31,7 +31,7 @@ dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv",
 ds <- c(3, 5, 10)
 d.n <- length(ds)   # this should match the number of dx's below. 
 
-# Get SST for 1, 5, 10 km around each point. 
+# Get SST for 3, 5, 10 km around each point. 
 latlon <- select(dat0, Latitude, Longitude) %>% 
   transmute(X = Longitude, Y = Latitude,
             BeginX_1 = NA, BeginY_1 = NA, EndX_1 = NA, EndY_1 = NA,
@@ -164,7 +164,7 @@ for (k in 1:nrow(latlon)){
     
     if(!file.exists(out.file.name)){
       
-      # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, Monthly
+      # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, 0.01 degrees, Monthly
       sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
                        latlon[k, "Date"], "T00:00:00Z):1:(", 
                        latlon[k, "Date"], "T00:00:00Z)][(", 
@@ -186,7 +186,7 @@ for (k in 1:nrow(latlon)){
     }
     
     if (!file.exists(out.file.name.anom)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, 0.01 degrees, Monthly
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
                            latlon[k, "Date"], "T00:00:00Z):1:(", 
                            latlon[k, "Date"], "T00:00:00Z)][(", 
@@ -201,7 +201,7 @@ for (k in 1:nrow(latlon)){
     }
     
     if (!file.exists(out.file.name.lag30d)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, 0.01 degrees, Monthly
       sst30dURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 
                           (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
                           (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
@@ -217,7 +217,7 @@ for (k in 1:nrow(latlon)){
     }
     
     if (!file.exists(out.file.name.anom.lag30d)){
-      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, Monthly
+      # Multi-scale Ultra-high resolution (MUR) SST analysis anomaly fv04.1, 0.01 degrees, Monthly
       sstanomURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41anommday.nc?sstAnom[(",
                            (latlon[k, "Date"] - 29), "T00:00:00Z):1:(", 
                            (latlon[k, "Date"] - 29), "T00:00:00Z)][(", 
