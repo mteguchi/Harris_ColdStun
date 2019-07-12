@@ -8,25 +8,42 @@ library(ncdf4)
 
 save.fig <- FALSE #TRUE
 
-dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv", 
+# dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv", 
+#                  header = TRUE)  %>%
+#   rownames_to_column() %>%
+#   select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
+#   mutate(Age = as.factor(toupper(Age)),
+#          Sex = as.factor(toupper(Sex)),
+#          Condition = as.factor(toupper(Condition)),
+#          ID = rowname,
+#          Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
+#                                     ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
+#          Body_Temp_C = Confirmed.body.temp.C,
+#          Year = Year_Initially_Observed,
+#          Month = Month_Initially_Observed,
+#          Day = Day_Initially_Observed,
+#          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
+#   select(ID, Age, State, Latitude, Longitude, 
+#          Sex, Weight_kg, CCL_cm, CCW_cm,
+#          Body_Temp_C, Date, Species) %>%
+#   filter(Latitude > 34.45)
+
+
+dat0 <- read.csv(file = "data/ColdStun_data_July2019.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
-  select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
-  mutate(Age = as.factor(toupper(Age)),
+  mutate(Weight_kg = Admit_weight_kg,
+         CCL_cm = CCL,
          Sex = as.factor(toupper(Sex)),
-         Condition = as.factor(toupper(Condition)),
          ID = rowname,
-         Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
-                                    ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
-         Body_Temp_C = Confirmed.body.temp.C,
-         Year = Year_Initially_Observed,
-         Month = Month_Initially_Observed,
-         Day = Day_Initially_Observed,
+         Species = Species_Code, 
+         Body_Temp_C = Initial_body_temp_C,
          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
-  select(ID, Age, State, Latitude, Longitude, 
-         Sex, Weight_kg, CCL_cm, CCW_cm,
-         Body_Temp_C, Date, Species) %>%
-  filter(Latitude > 34.45)
+  select(ID, Latitude, Longitude, 
+         Sex, Weight_kg, CCL_cm, 
+         Body_Temp_C, Date, Species,
+         Hypothermic) %>%
+  filter(!is.na(Latitude))
 
 ds <- c(3, 5, 10)
 d.n <- length(ds)   # this should match the number of dx's below. 

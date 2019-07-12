@@ -1,0 +1,424 @@
+---
+title: "Cold stunned turtles take 3"
+output: html_notebook
+---
+
+
+
+This document describes statistical analyses of cold stunned marine turtle data from Heather Harris. First load data and see what they look like. These data came from HH. 
+
+
+```{r}
+
+rm(list=ls())
+source("cold_stun_functions.R")
+library(tidyverse)
+
+save.fig <- FALSE #TRUE
+
+dat0 <- read.csv(file = "data/ColdStun_data_July2019.csv", 
+                 header = TRUE)  %>%
+  rownames_to_column() %>%
+  mutate(Weight_kg = Admit_weight_kg,
+         CCL_cm = CCL,
+         Sex = as.factor(toupper(Sex)),
+         ID = rowname,
+         Species = Species_Code, 
+         Body_Temp_C = Initial_body_temp_C,
+         Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
+  select(ID, Latitude, Longitude, 
+         Sex, Weight_kg, CCL_cm, 
+         Body_Temp_C, Date, Species,
+         Hypothermic) 
+summary(dat0)
+
+```
+
+
+Look at size measurements - compare with other stranding data.  May be good to show these are different from other stranded turtles. 
+
+
+```{r}
+p3 <- ggplot() + 
+  geom_point(data = dat0,
+             aes(x = CCL_cm, y = Weight_kg, color = Species, size = CCL_cm)) 
+
+if (save.fig)
+  ggsave(plot = p3,
+         device = "png",
+         dpi = 600,
+         filename = "figures/CCL_Mass_CCW.png")
+p3
+```
+
+Looks like one loggerhead has incorrect weight...  
+
+```{r}
+dat0 %>% filter(Species == "CC")
+```
+
+```{r}
+dat0 %>% group_by(Hypothermic) %>% 
+  select(CCL_cm, Hypothermic) %>%
+  na.omit() %>%
+  summarise(mean_CCL = mean(CCL_cm),
+            SD = sqrt(var(CCL_cm)),
+            SE = sqrt(var(CCL_cm))/sqrt(n()),
+            n = n())
+
+```
+
+```{r}
+dat1 <- dat0 %>% group_by(Hypothermic) %>% 
+  select(CCL_cm, Hypothermic) %>%
+  na.omit()
+
+lm1 <- lm(CCL_cm ~ Hypothermic, data = dat1)
+summary(lm1)
+```
+
+So, there isn't any statistical difference between the two groups. An ANOVA confirms this. 
+
+```{r}
+ggplot() + 
+  geom_histogram(data = dat1,
+                 aes(x = CCL_cm),
+                 bins = 20) + 
+  facet_grid(cols = vars(Hypothermic))
+```
+
+
+Not really... so, we don't think there was any change in CCL over time. 
+
+The temperature data in the dataset are not very useful because some of them come from quite far away. We should probably get better data. Wind speed and direction prior to and at the day of stranding should be looked at. 
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+library(sp)
+library(ncdf4)
+
+# distances from each stranding within which SST data are extracted. It is measured from the 
+# center (stranding location) +/- ds (in km). So, in effect SST is extracted from 2 * ds x 2 * ds
+# area. Note they are not that different at the scale of 3 km to 10 km. 
+
+ds <- c(3, 5, 10)
+dat0 %>% filter(!is.na(Latitude)) -> dat0.1
+cold.stun.oce <- get_ocedata_fcn(ds, dat0.1, dataset = "coldstun")
+
+```
+
+
+Once data are downloaded, combine it with the original dataset.  CCL was not measured for 3 with body temperature... kinda odd? Only ridleys are available... 
+
+```{r}
+dat_01 <- cbind(dat0.1, 
+                cold.stun.oce$sst01.df, 
+                cold.stun.oce$sst01.min.df, 
+                cold.stun.oce$sst01.anom.df, 
+                cold.stun.oce$sst01.lag30d.df, 
+                cold.stun.oce$sst01.min.lag30d.df, 
+                cold.stun.oce$sst01.sd.df, 
+                cold.stun.oce$sst01.anom.lag30d.df) %>%
+  mutate(SST_1_CV = SST_1_SD/SST_1,
+         SST_2_CV = SST_2_SD/SST_2,
+         SST_3_CV = SST_3_SD/SST_3)
+
+p4 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = SST_1_min, 
+                 y = Body_Temp_C),
+             size = 3) +
+  geom_abline(slope = 1, intercept = 0) +
+  xlim(c(8, 12)) +
+  labs(y = "Body temperature (C)", 
+       x = "Monthly composite SST minimum (3 km x 3 km, C)") 
+
+
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SST01_1_min_BodyTemp.png")
+
+p4
+```
+
+There is one that had very high body temperature relative to the ambient SST.   
+
+```{r}
+dat0.1 %>% filter(Body_Temp_C > 20) 
+```
+
+
+```{r}
+dat_0125 <- cbind(dat0.1, 
+              cold.stun.oce$sst0125.df, 
+              cold.stun.oce$sst0125.min.df, 
+              cold.stun.oce$sst0125.lag30d.df, 
+              cold.stun.oce$sst0125.min.lag30d.df, 
+              cold.stun.oce$sst0125.sd.df)
+
+p4 <- ggplot(data = filter(dat_0125, SST0125_3_min < Inf)) + 
+  geom_point(aes(x = SST0125_3_min, 
+                 y = Body_Temp_C), 
+             size = 3) +
+  geom_abline(slope = 1, intercept = 0) +
+  xlim(c(9, 13))
+
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SST0125_3_min_BodyTemp.png")
+
+p4
+```
+
+We get smaller sample size because of some missing data points for the minimum SST.  
+
+
+```{r}
+
+p4 <- ggplot(data = filter(dat_0125, SST0125_1_min < Inf)) + 
+  geom_point(aes(x = SST0125_1_min, 
+                 y = Body_Temp_C),
+             size = 3) +
+  geom_abline(slope = 1, intercept = 0) 
+  #xlim(c(9, 13))
+
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SST0125_3_min_BodyTemp.png")
+
+p4
+```
+
+Only 5 data points are available for the smaller spatial span... 
+
+
+```{r}
+
+p5 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "Monthly composite SST minimum (10 km x 10 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_3_min.png")
+
+p5
+```
+
+
+```{r}
+
+p5 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_2_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "Monthly composite SST minimum (5 km x 5 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_2_min.png")
+
+p5
+```
+
+
+```{r}
+
+p5 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_1_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "Monthly composite SST minimum (3 km x 3 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_1_min.png")
+
+p5
+```
+
+
+```{r}
+
+p5 <- ggplot(data = filter(dat_0125, SST0125_3_min < Inf)) + 
+  geom_point(aes(x = Date, 
+                 y = SST0125_3_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "14-day composite SST minimum (10 km x 10 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST0125_2_min.png")
+
+p5
+```
+
+
+```{r}
+
+p5 <- ggplot(data = filter(dat_0125, SST0125_2_min < Inf)) + 
+  geom_point(aes(x = Date, 
+                 y = SST0125_2_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "14-day composite SST minimum (5 km x 5 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST0125_2_min.png")
+
+p5
+```
+
+
+
+```{r}
+
+p5 <- ggplot(data = filter(dat_0125, SST0125_1_min < Inf)) + 
+  geom_point(aes(x = Date, 
+                 y = SST0125_1_min, 
+                 color = Species),
+             size = 3) + 
+  labs(x = "", y = "14-day composite SST minimum (3 km x 3 km, C)") + 
+  theme(legend.position = c(0.9, 0.8))
+
+if (save.fig)
+  ggsave(plot = p5,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST0125_1_min.png")
+
+p5
+```
+
+
+```{r}
+p6 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_ANOM, 
+                 color = Species),
+             size = 3)
+
+if (save.fig)
+  ggsave(plot = p6,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_3_anom.png")
+
+p6
+```
+
+
+```{r}
+p7 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_CV, 
+                 color = Species),
+             size = 3)
+
+if (save.fig)
+  ggsave(plot = p7,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_3_cv.png")
+
+p7
+```
+
+
+```{r}
+p9 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_min_lag30, 
+                 color = Species),
+             size = 3)
+
+if (save.fig)
+  ggsave(plot = p9,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_3_min_lag30.png")
+
+p9
+
+```
+
+
+
+```{r}
+p8 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_3_ANOM_lag30, 
+                 color = Species),
+             size = 3)
+
+if (save.fig)
+  ggsave(plot = p8,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_3_anom_lag30.png")
+
+p8
+```
+
+
+```{r}
+p10 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_2_min_lag30, 
+                 color = Species),
+             size = 3)
+
+
+if (save.fig)
+  ggsave(plot = p10,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_2_min_lag30.png")
+
+
+p10
+```
+
+
+
+```{r}
+p11 <- ggplot(data = dat_01) + 
+  geom_point(aes(x = Date, 
+                 y = SST_2_ANOM_lag30, 
+                 color = Species),
+             size = 3)
+
+if (save.fig)
+  ggsave(plot = p11,
+         device = "png",
+         dpi = 600,
+         filename = "figures/date_SST01_2_anom_lag30.png")
+
+p11
+```
