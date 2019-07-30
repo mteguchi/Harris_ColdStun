@@ -5,7 +5,7 @@ library(tidyverse)
 
 save.fig <- FALSE #TRUE
 
-dat0 <- read.csv(file = "data/ColdStun_data_July2019.csv", 
+dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
   mutate(Weight_kg = Admit_weight_kg,
@@ -113,15 +113,19 @@ p1 <- ggplot() +
                  y = Latitude,
                  color = Species),
              size = 2,
-             alpha = 0.5)  +
+             alpha = 0.8)  +
   coord_map() +
   xlim(c(-128, E.end))+
   ylab(expression(paste("Latitude (", degree, "N)"))) +
-  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) 
-    
+  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) +
+  scale_color_discrete(breaks = c("CC", "CM", "LV"), 
+                      labels = c("Loggerhead", "Green", "Olive Ridley")) + 
+  theme(legend.position = c(0.8, 0.8))
+
+p1    
 if (save.fig)
   ggsave(plot = p1,
          device = "png",
          dpi = 600,
          filename = "figures/stranding_map.png")
-p1
+

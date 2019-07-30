@@ -4,6 +4,7 @@ rm(list=ls())
 source("cold_stun_functions.R")
 library(tidyverse)
 library(ncdf4)
+library(rgdal)
 
 
 save.fig <- FALSE #TRUE
@@ -29,7 +30,7 @@ save.fig <- FALSE #TRUE
 #   filter(Latitude > 34.45)
 
 
-dat0 <- read.csv(file = "data/ColdStun_data_July2019.csv", 
+dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
   mutate(Weight_kg = Admit_weight_kg,
@@ -136,7 +137,10 @@ for (k in 1:nrow(latlon)){
                                      ds[k1], "km_sst0125.nc")
     out.file.name.sst.0125.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
                                             ds[k1], "km_sst0125_lag30d.nc")
-    
+    out.file.name.sst.analyzed <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                         ds[k1], "km_sst_analyzed.nc")
+    out.file.name.sst.analyzed.lag30d <- paste0("data/ncfiles/turtle_", dat0[k, "ID"], "_",
+                                         ds[k1], "km_sst_analyzed_lag30d.nc")
     
     xlim <- c(latlon[k, (4*k1 - 1)],
               latlon[k, (4*k1 + 1)])
@@ -144,6 +148,43 @@ for (k in 1:nrow(latlon)){
               latlon[k, (4*k1 + 2)])
     #tlim <- c(latlon[k, "Date"] - 7,
     #          latlon[k, "Date"] + 7)
+    
+    if (!file.exists(out.file.name.sst.analyzed)){
+      #SST Multi-scale Ultra-High resolution SST Analysis fv04.1, Global 0.01 degrees,
+      #2002-present, Daily
+      #https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.graph?analysed_sst
+      sstanalyzedURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc?analysed_sst[(",
+                               latlon[k, "Date"], "T09:00:00Z)][(", 
+                               signif(ylim[1], digits = 6), "):(", 
+                               signif(ylim[2], digits = 6), ")][(", 
+                               signif(xlim[1], digits = 7), "):(", 
+                               signif(xlim[2], digits = 7), ")]")
+      #https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc?analysed_sst%5B(2019-07-28T09:00:00Z)%5D%5B(44.6):(44.66)%5D%5B(-124.1):(-124.03)%5D&.draw=surface&.vars=longitude%7Clatitude%7Canalysed_sst&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff
+      
+      test <- download.file(sstanalyzedURL,
+                            destfile = out.file.name.sst.analyzed,
+                            mode='wb')
+      
+    }
+    
+    if (!file.exists(out.file.name.sst.analyzed.lag30d)){
+      #SST Multi-scale Ultra-High resolution SST Analysis fv04.1, Global 0.01 degrees,
+      #2002-present, Daily
+      #https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.graph?analysed_sst
+      sstanalyzedURL <- paste0("https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc?analysed_sst%5B(",
+                               (latlon[k, "Date"]-29), "T09:00:00Z)][(", 
+                               signif(ylim[1], digits = 6), "):(", 
+                               signif(ylim[2], digits = 6), ")][(", 
+                               signif(xlim[1], digits = 7), "):(", 
+                               signif(xlim[2], digits = 7), ")]")
+      
+      #2019-07-28T09:00:00Z)%5D%5B(-89.99):(89.99)%5D%5B(-179.99):(180.0)%5D&.draw=surface&.vars=longitude%7Clatitude%7Canalysed_sst&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff"
+      test <- download.file(sstanalyzedURL,
+                            destfile = out.file.name.sst.analyzed.lag30d,
+                            mode='wb')
+      
+    }
+    
     
     if(!file.exists(out.file.name.sst.0125)){
       # SST, Aqua MODIS, NPP, 0.0125 degrees, West US, Day time (11 microns), 
@@ -179,7 +220,8 @@ for (k in 1:nrow(latlon)){
                             mode='wb')
     }
     
-    if(!file.exists(out.file.name)){
+    
+     if(!file.exists(out.file.name)){
       
       # Multi-scale Ultra-high resolution (MUR) SST analysis fv04.1, 0.01 degrees, Monthly
       sstURL <- paste0("https://upwell.pfeg.noaa.gov/erddap/griddap/jplMURSST41mday.nc?sst[(", 

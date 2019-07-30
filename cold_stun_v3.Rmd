@@ -16,7 +16,7 @@ library(tidyverse)
 
 save.fig <- FALSE #TRUE
 
-dat0 <- read.csv(file = "data/ColdStun_data_July2019.csv", 
+dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
   mutate(Weight_kg = Admit_weight_kg,
@@ -422,3 +422,163 @@ if (save.fig)
 
 p11
 ```
+
+
+```{r}
+#rm(list=ls())
+save.fig <- T
+dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
+                 header = TRUE)  %>%
+  rownames_to_column() %>%
+  mutate(Weight_kg = Admit_weight_kg,
+         CCL_cm = CCL,
+         Sex = as.factor(toupper(Sex)),
+         ID = rowname,
+         Species = Species_Code, 
+         Body_Temp_C = Initial_body_temp_C,
+         Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
+  select(ID, Latitude, Longitude, 
+         Sex, Weight_kg, CCL_cm, 
+         Body_Temp_C, Date, Species,
+         Hypothermic,
+         MinSST4wkPrior, MinSST3wkPrior, MinSST2wkPrior, MinSST1wkPrior, MinSSTday,
+         Buoy_distance_km) %>%
+  filter(!is.na(Body_Temp_C))
+
+
+p12 <- ggplot(data = dat0) + 
+  geom_point(aes(x = MinSST4wkPrior,
+                 y = Body_Temp_C,
+                 size = Buoy_distance_km,
+                 color = Latitude,
+                 shape = Species),
+             alpha = 0.8) + 
+  scale_shape_discrete(breaks = c("CM", "LV"),
+                       labels = c("Green", "Olive ridley")) + 
+  scale_size_continuous(guide = guide_legend(title = "Buoy distance (km)")) + 
+  theme(legend.position = c(0.9, 0.45)) + 
+  labs(x = expression("Minimum SST 4 weeks prior to stranding (" *degree*C* ")"),
+       y = expression("Body temperature (" *degree*C* ")")) +
+  xlim(c(8, 25)) + 
+  ylim(c(8, 25))
+
+p12
+
+if (save.fig)
+  ggsave(plot = p12,
+         device = "png",
+         dpi = 600,
+         filename = "figures/BodyTempVsMinSST4wkPrior.png")
+
+```
+
+
+```{r}
+p13 <- ggplot(data = dat0) + 
+  geom_point(aes(x = MinSST3wkPrior,
+                 y = Body_Temp_C,
+                 size = Buoy_distance_km,
+                 color = Latitude,
+                 shape = Species),
+             alpha = 0.8)+ 
+  scale_shape_discrete(breaks = c("CM", "LV"),
+                       labels = c("Green", "Olive ridley")) + 
+  scale_size_continuous(guide = guide_legend(title = "Buoy distance (km)")) + 
+  theme(legend.position = c(0.9, 0.45)) + 
+  labs(x = expression("Minimum SST 3 weeks prior to stranding (" *degree*C* ")"),
+       y = expression("Body temperature (" *degree*C* ")"))+
+  xlim(c(8, 25)) + 
+  ylim(c(8, 25))
+
+p13
+
+if (save.fig)
+  ggsave(plot = p13,
+         device = "png",
+         dpi = 600,
+         filename = "figures/BodyTempVsMinSST3wkPrior.png")
+
+
+```
+
+
+```{r}
+p14 <- ggplot(data = dat0) + 
+  geom_point(aes(x = MinSST2wkPrior,
+                 y = Body_Temp_C,
+                 size = Buoy_distance_km,
+                 color = Latitude,
+                 shape = Species),
+             alpha = 0.8) + 
+  scale_shape_discrete(breaks = c("CM", "LV"),
+                       labels = c("Green", "Olive ridley")) + 
+  scale_size_continuous(guide = guide_legend(title = "Buoy distance (km)")) + 
+  theme(legend.position = c(0.9, 0.45)) + 
+  labs(x = expression("Minimum SST 2 weeks prior to stranding (" *degree*C* ")"),
+       y = expression("Body temperature (" *degree*C* ")"))+
+  xlim(c(8, 25)) + 
+  ylim(c(8, 25))
+
+p14
+
+if (save.fig)
+  ggsave(plot = p14,
+         device = "png",
+         dpi = 600,
+         filename = "figures/BodyTempVsMinSST2wkPrior.png")
+
+```
+
+```{r}
+p15 <- ggplot(data = dat0) + 
+  geom_point(aes(x = MinSST1wkPrior,
+                 y = Body_Temp_C,
+                 size = Buoy_distance_km,
+                 color = Latitude,
+                 shape = Species))+ 
+  scale_shape_discrete(breaks = c("CM", "LV"),
+                       labels = c("Green", "Olive ridley")) + 
+  scale_size_continuous(guide = guide_legend(title = "Buoy distance (km)")) + 
+  theme(legend.position = c(0.9, 0.45)) + 
+  labs(x = expression("Minimum SST 1 week prior to stranding (" *degree*C* ")"),
+       y = expression("Body temperature (" *degree*C* ")"))+
+  xlim(c(8, 25)) + 
+  ylim(c(8, 25))
+
+p15
+
+if (save.fig)
+  ggsave(plot = p15,
+         device = "png",
+         dpi = 600,
+         filename = "figures/BodyTempVsMinSST1wkPrior.png")
+
+```
+
+
+```{r}
+p16 <- ggplot(data = dat0) + 
+  geom_point(aes(x = MinSSTday,
+                 y = Body_Temp_C,
+                 size = Buoy_distance_km,
+                 color = Latitude,
+                 shape = Species)) + 
+  scale_shape_discrete(breaks = c("CM", "LV"),
+                       labels = c("Green", "Olive ridley")) + 
+  scale_size_continuous(guide = guide_legend(title = "Buoy distance (km)")) + 
+  theme(legend.position = c(0.9, 0.45)) + 
+  labs(x = expression("Minimum SST day of stranding (" *degree*C* ")"),
+       y = expression("Body temperature (" *degree*C* ")"))+
+  xlim(c(8, 25)) + 
+  ylim(c(8, 25))
+
+p16
+
+if (save.fig)
+  ggsave(plot = p16,
+         device = "png",
+         dpi = 600,
+         filename = "figures/BodyTempVsMinSSTday.png")
+
+```
+
