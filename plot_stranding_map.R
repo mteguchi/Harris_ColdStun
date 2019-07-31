@@ -146,7 +146,7 @@ p1 <- ggplot() +
                                 paste0("Green (", filter(n.Species, Species == "CM")[2], ")"),
                                 paste0("Olive ridley (", filter(n.Species, Species == "LV")[2], ")")),
                      values = c("magenta", "green", "blue")) +
-  theme(legend.position = c(0.8, 0.7),
+  theme(legend.position = c(0.783, 0.87),
         text = element_text(size = 15, face = "bold"),
         axis.text = element_text(size = 13, face = "bold"))
   
