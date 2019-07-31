@@ -30,7 +30,7 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
   
   d.n <- length(ds)   # this should match the number of dx's below. 
   
-  # Get SST for 1, 5, 10 km around each point. 
+  # Get SST for 3, 5, 10 km around each point. 
   latlon <- select(dat0, Latitude, Longitude) %>% 
     transmute(X = Longitude, Y = Latitude,
               BeginX_1 = NA, BeginY_1 = NA, EndX_1 = NA, EndY_1 = NA,
@@ -102,11 +102,18 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
   wind <- wind_max <- wind_30d <- wind_max_30d <- matrix(nrow = nrow(latlon),
                                                          ncol = 1)
   
-  sst.analyzed <- sst.analyzed_sd <- sst.analyzed_min <- matrix(nrow = nrow(latlon),
+  sst.analyzed <- sst.analyzed_sd <- sst.analyzed_min <- sst.analyzed_max <- matrix(nrow = nrow(latlon),
                                                                 ncol = d.n)
   
-  sst.analyzed_lag30d <- sst.analyzed_sd_lag30d <- sst.analyzed_min_lag30d <- matrix(nrow = nrow(latlon),
+  sst.analyzed_lag30d <- sst.analyzed_sd_lag30d <- sst.analyzed_min_lag30d <- sst.analyzed_max_lag30d <- matrix(nrow = nrow(latlon),
                                                                 ncol = d.n)
+  
+  sst.analyzed.latlon <- matrix(nrow = nrow(latlon),
+                                ncol = d.n*2*2)
+  sst.analyzed.date <- array(dim = c(nrow(latlon), d.n))
+  sst.analyzed.30d.latlon <- matrix(nrow = nrow(latlon),
+                                ncol = d.n*2*2)
+  sst.analyzed.30d.date <- array(dim = c(nrow(latlon),d.n))
   
   k <- k1 <- 1
   
@@ -150,28 +157,40 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
       #tlim <- c(latlon[k, "Date"] - 7,
       #          latlon[k, "Date"] + 7)
       datafileID <- nc_open(out.file.name.sst.analyzed)
-      lon <- ncvar_get(datafileID, varid="longitude")
-      lat <- ncvar_get(datafileID, varid="latitude")
+      lon.analyzed <- ncvar_get(datafileID, varid="longitude")
+      lat.analyzed <- ncvar_get(datafileID, varid="latitude")
       time <- ncvar_get(datafileID, varid="time")
-      time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+      time.analyzed <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
       mat <- ncvar_get(datafileID, varid = 'analysed_sst')
       nc_close(datafileID)
       
       sst.analyzed[k, k1] <- mean(mat, na.rm = T)
       sst.analyzed_sd[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
       sst.analyzed_min[k, k1] <- min(mat, na.rm = T)
+      sst.analyzed_max[k, k1] <- max(mat, na.rm = T)
+      
+      latlon.tmp <- c(min(lon.analyzed, na.rm = T), max(lon.analyzed, na.rm = T),
+                  min(lat.analyzed, na.rm = T), max(lat.analyzed, na.rm = T))
+      sst.analyzed.latlon[k, ((k1-1)*4 + 1):((k1-1)*4 + 4)] <- latlon.tmp 
+      sst.analyzed.date[k, k1] <- as.Date(time.analyzed)
       
       datafileID <- nc_open(out.file.name.sst.analyzed.lag30d)
-      lon <- ncvar_get(datafileID, varid="longitude")
-      lat <- ncvar_get(datafileID, varid="latitude")
+      lon.analyzed.30d <- ncvar_get(datafileID, varid="longitude")
+      lat.analyzed.30d <- ncvar_get(datafileID, varid="latitude")
       time <- ncvar_get(datafileID, varid="time")
-      time <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
+      time.analyzed.30d <- as.POSIXlt(time, origin='1970-01-01',tz= "GMT")  
       mat <- ncvar_get(datafileID, varid = 'analysed_sst')
       nc_close(datafileID)
       
       sst.analyzed_lag30d[k, k1] <- mean(mat, na.rm = T)
       sst.analyzed_sd_lag30d[k, k1] <- sqrt(var(as.vector(mat), na.rm = T))
       sst.analyzed_min_lag30d[k, k1] <- min(mat, na.rm = T)
+      sst.analyzed_max_lag30d[k, k1] <- max(mat, na.rm = T)
+      latlon.tmp <- c(min(lon.analyzed.30d, na.rm = T), max(lon.analyzed.30d, na.rm = T),
+                      min(lat.analyzed.30d, na.rm = T), max(lat.analyzed.30d, na.rm = T))
+      
+      sst.analyzed.30d.latlon[k, ((k1-1)*4 + 1):((k1-1)*4 + 4)] <- latlon.tmp 
+      sst.analyzed.30d.date[k, k1] <- as.Date(time.analyzed.30d)
       
       datafileID <- nc_open(out.file.name.sst.0125)
       lon <- ncvar_get(datafileID, varid="longitude")
@@ -242,79 +261,10 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
       
     }
     
-  #   if (latlon[k, "Date"] < as.Date("2018-10-10")){
-  #     datafileID <- nc_open(out.file.name.wind)
-  #     lon <- ncvar_get(datafileID, varid="longitude")
-  #     lat <- ncvar_get(datafileID, varid="latitude")
-  #     time <- ncvar_get(datafileID, varid="time")
-  #     time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
-  #     u <- ncvar_get(datafileID, varid = "u")
-  #     v <- ncvar_get(datafileID, varid = "v")
-  #     w <- ncvar_get(datafileID, varid = "w")
-  #     
-  #     nc_close(datafileID)
-  #   } else {
-  #     U <- v <- w <- NA
-  #   }
-  #   wind[k, 1] <- mean(w, na.rm = T)
-  #   wind_max[k, 1] <- max(w, na.rm = T)
-  #   #wind_u[k, 1] <- mean(u, na.rm = T)
-  #   #wind_v[k, 1] <- mean(v, na.rm = T)
-  #   
-  #   if (((latlon[k, "Date"] > as.Date("2011-09-30")) & 
-  #        (latlon[k, "Date"] - 30) < as.Date("2011-10-01"))){
-  #     
-  #     datafileID <- nc_open(out.file.name.wind.30d)
-  #     
-  #     datafileID2 <- nc_open(paste0(unlist(out.file.name.wind.30d, "\\.nc"), "_dat1.nc"))
-  #     
-  #     lon <- ncvar_get(datafileID, varid="longitude")
-  #     lat <- ncvar_get(datafileID, varid="latitude")
-  #     time <- ncvar_get(datafileID, varid="time")
-  #     time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
-  #     u <- ncvar_get(datafileID, varid = "u")
-  #     v <- ncvar_get(datafileID, varid = "v")
-  #     w <- ncvar_get(datafileID, varid = "w")
-  #     
-  #     lon2 <- ncvar_get(datafileID2, varid="longitude")
-  #     lat2 <- ncvar_get(datafileID2, varid="latitude")
-  #     time2 <- ncvar_get(datafileID2, varid="time")
-  #     time2 <- as.POSIXlt(time2, origin='1970-01-01', tz= "GMT")  
-  #     u2 <- ncvar_get(datafileID2, varid = "u")
-  #     v2 <- ncvar_get(datafileID2, varid = "v")
-  #     w2 <- ncvar_get(datafileID2, varid = "w")
-  #     
-  #     nc_close(datafileID)
-  #     nc_close(datafileID2)
-  #     
-  #     u <- abind::abind(u, u2)
-  #     v <- abind::abind(v, v2)
-  #     w <- abind::abind(w, w2)
-  #     
-  #   } else {
-  #     if (latlon[k, "Date"] < as.Date("2018-10-10")){
-  #       datafileID <- nc_open(out.file.name.wind.30d)
-  #       lon <- ncvar_get(datafileID, varid="longitude")
-  #       lat <- ncvar_get(datafileID, varid="latitude")
-  #       time <- ncvar_get(datafileID, varid="time")
-  #       time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
-  #       u <- ncvar_get(datafileID, varid = "u")
-  #       v <- ncvar_get(datafileID, varid = "v")
-  #       w <- ncvar_get(datafileID, varid = "w")
-  #       
-  #       nc_close(datafileID)
-  #     } else {
-  #       w <- u <- v <- NA
-  #     }
-  #   }
-  #   
-  #   wind_30d[k, 1] <- mean(w, na.rm = T)
-  #   wind_max_30d[k, 1] <- max(w, na.rm = T)
-  #   #wind_u_30d[k, 1] <- mean(u, na.rm = T)
-  #   #wind_v_30d[k, 1] <- mean(v, na.rm = T)
-  #   
+    
   }
   
+  # _1, _2, and _3 correspond to three distances defined in input. 
   sst01.df <- data.frame(sst01)
   colnames(sst01.df) <- c("SST_1", "SST_2", "SST_3")
   
@@ -355,22 +305,50 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
   colnames(sst0125.min.lag30d.df) <- c("SST0125_1_min_lag30", "SST0125_2_min_lag30", "SST0125_3_min_lag30")
   
   sst.analyzed.df <- data.frame(sst.analyzed)
-  colnames(sst0125.df) <- c("SST0125_1", "SST0125_2", "SST0125_3")
+  colnames(sst.analyzed.df) <- c("SSTanalyzed_1", "SSTanalyzed_2", "SSTanalyzed_3")
   
   sst.analyzed.sd.df <- data.frame(sst.analyzed_sd)
-  colnames(sst0125.sd.df) <- c("SSTanalyzed_1_SD", "SSTanalyzed_2_SD", "SSTanalyzed_3_SD")
+  colnames(sst.analyzed.sd.df) <- c("SSTanalyzed_1_SD", "SSTanalyzed_2_SD", "SSTanalyzed_3_SD")
   
   sst.analyzed.min.df <- data.frame(sst.analyzed_min)
   colnames(sst.analyzed.min.df) <- c("SSTanalyzed_1_min", "SSTanalyzed_2_min", "SSTanalyzed_3_min")
   
+  sst.analyzed.max.df <- data.frame(sst.analyzed_max)
+  colnames(sst.analyzed.max.df) <- c("SSTanalyzed_1_max", 
+                                     "SSTanalyzed_2_max", 
+                                     "SSTanalyzed_3_max")
+  
   sst.analyzed.lag30d.df <- data.frame(sst.analyzed_lag30d)
-  colnames(sst.analyzed.lag30d.df) <- c("SSTanalyzed_1_lag30d", "SSTanalyzed_2_lag30d", "SSTanalyzed_3_lag30d")
+  colnames(sst.analyzed.lag30d.df) <- c("SSTanalyzed_1_lag30d", 
+                                        "SSTanalyzed_2_lag30d", 
+                                        "SSTanalyzed_3_lag30d")
   
   sst.analyzed.sd.lag30d.df <- data.frame(sst.analyzed_sd_lag30d)
-  colnames(sst.analyzed.sd.lag30d.df) <- c("SSTanalyzed_1_SD", "SSTanalyzed_2_SD", "SSTanalyzed_3_SD")
+  colnames(sst.analyzed.sd.lag30d.df) <- c("SSTanalyzed_1_SD_lag30d", 
+                                           "SSTanalyzed_2_SD_lag30d", 
+                                           "SSTanalyzed_3_SD_lag30d")
   
   sst.analyzed.min.lag30d.df <- data.frame(sst.analyzed_min_lag30d)
-  colnames(sst.analyzed.min.lag30d.df) <- c("SSTanalyzed_1_min_lag30", "SSTanalyzed_2_min_lag30", "SSTanalyzed_3_min_lag30")
+  colnames(sst.analyzed.min.lag30d.df) <- c("SSTanalyzed_1_min_lag30", 
+                                            "SSTanalyzed_2_min_lag30", 
+                                            "SSTanalyzed_3_min_lag30")
+  
+  sst.analyzed.max.lag30d.df <- data.frame(sst.analyzed_max_lag30d)
+  colnames(sst.analyzed.max.lag30d.df) <- c("SSTanalyzed_1_max_lag30", 
+                                            "SSTanalyzed_2_max_lag30", 
+                                            "SSTanalyzed_3_max_lag30")
+
+  sst.analyzed.latlon.df <- data.frame(sst.analyzed.latlon)
+  colnames(sst.analyzed.latlon.df) <- c("Lon1_1", "Lon2_1", "Lat1_1", "Lat2_1",
+                                        "Lon1_2", "Lon2_2", "Lat1_2", "Lat2_2",
+                                        "Lon1_3", "Lon2_3", "Lat1_3", "Lat2_3")
+  sst.analyzed.date.df <- data.frame(sst.analyzed.date)
+  
+  sst.analyzed.30d.latlon.df <- data.frame(sst.analyzed.30d.latlon)
+  colnames(sst.analyzed.30d.latlon.df) <- c("Lon1_1", "Lon2_1", "Lat1_1", "Lat2_1",
+                                            "Lon1_2", "Lon2_2", "Lat1_2", "Lat2_2",
+                                            "Lon1_3", "Lon2_3", "Lat1_3", "Lat2_3")
+  sst.analyzed.30d.date.df <- data.frame(sst.analyzed.30d.date)
   
   # wind.df <- data.frame(wind)
   # wind.max.df <- data.frame(wind_max)
@@ -380,9 +358,15 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
   out.list <- list(sst.analyzed.df = sst.analyzed.df, 
                    sst.analyzed.sd.df = sst.analyzed.sd.df, 
                    sst.analyzed.min.df = sst.analyzed.min.df,
+                   sst.analyzed.max.df = sst.analyzed.max.df,
                    sst.analyzed.lag30d.df = sst.analyzed.lag30d.df, 
                    sst.analyzed.sd.lag30d.df = sst.analyzed.sd.lag30d.df, 
                    sst.analyzed.min.lag30d.df = sst.analyzed.min.lag30d.df,
+                   sst.analyzed.max.lag30d.df = sst.analyzed.max.lag30d.df,
+                   sst.analyzed.latlon.df = sst.analyzed.latlon.df,
+                   sst.analyzed.date.df = sst.analyzed.date.df,
+                   sst.analyzed.lag30d.latlon.df = sst.analyzed.30d.latlon.df,
+                   sst.analyzed.lag30d.date = sst.analyzed.30d.date.df,
                    sst0125.df = sst0125.df, 
                    sst0125.sd.df = sst0125.sd.df, 
                    sst0125.min.df = sst0125.min.df,
@@ -402,3 +386,76 @@ get_ocedata_fcn <- function(ds, dat0, dataset = "coldstun"){
                    # wind.max.30d.df = wind.max.30d.df)
   return(out.list)
 }
+
+
+#   if (latlon[k, "Date"] < as.Date("2018-10-10")){
+#     datafileID <- nc_open(out.file.name.wind)
+#     lon <- ncvar_get(datafileID, varid="longitude")
+#     lat <- ncvar_get(datafileID, varid="latitude")
+#     time <- ncvar_get(datafileID, varid="time")
+#     time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+#     u <- ncvar_get(datafileID, varid = "u")
+#     v <- ncvar_get(datafileID, varid = "v")
+#     w <- ncvar_get(datafileID, varid = "w")
+#     
+#     nc_close(datafileID)
+#   } else {
+#     U <- v <- w <- NA
+#   }
+#   wind[k, 1] <- mean(w, na.rm = T)
+#   wind_max[k, 1] <- max(w, na.rm = T)
+#   #wind_u[k, 1] <- mean(u, na.rm = T)
+#   #wind_v[k, 1] <- mean(v, na.rm = T)
+#   
+#   if (((latlon[k, "Date"] > as.Date("2011-09-30")) & 
+#        (latlon[k, "Date"] - 30) < as.Date("2011-10-01"))){
+#     
+#     datafileID <- nc_open(out.file.name.wind.30d)
+#     
+#     datafileID2 <- nc_open(paste0(unlist(out.file.name.wind.30d, "\\.nc"), "_dat1.nc"))
+#     
+#     lon <- ncvar_get(datafileID, varid="longitude")
+#     lat <- ncvar_get(datafileID, varid="latitude")
+#     time <- ncvar_get(datafileID, varid="time")
+#     time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+#     u <- ncvar_get(datafileID, varid = "u")
+#     v <- ncvar_get(datafileID, varid = "v")
+#     w <- ncvar_get(datafileID, varid = "w")
+#     
+#     lon2 <- ncvar_get(datafileID2, varid="longitude")
+#     lat2 <- ncvar_get(datafileID2, varid="latitude")
+#     time2 <- ncvar_get(datafileID2, varid="time")
+#     time2 <- as.POSIXlt(time2, origin='1970-01-01', tz= "GMT")  
+#     u2 <- ncvar_get(datafileID2, varid = "u")
+#     v2 <- ncvar_get(datafileID2, varid = "v")
+#     w2 <- ncvar_get(datafileID2, varid = "w")
+#     
+#     nc_close(datafileID)
+#     nc_close(datafileID2)
+#     
+#     u <- abind::abind(u, u2)
+#     v <- abind::abind(v, v2)
+#     w <- abind::abind(w, w2)
+#     
+#   } else {
+#     if (latlon[k, "Date"] < as.Date("2018-10-10")){
+#       datafileID <- nc_open(out.file.name.wind.30d)
+#       lon <- ncvar_get(datafileID, varid="longitude")
+#       lat <- ncvar_get(datafileID, varid="latitude")
+#       time <- ncvar_get(datafileID, varid="time")
+#       time <- as.POSIXlt(time, origin='1970-01-01', tz= "GMT")  
+#       u <- ncvar_get(datafileID, varid = "u")
+#       v <- ncvar_get(datafileID, varid = "v")
+#       w <- ncvar_get(datafileID, varid = "w")
+#       
+#       nc_close(datafileID)
+#     } else {
+#       w <- u <- v <- NA
+#     }
+#   }
+#   
+#   wind_30d[k, 1] <- mean(w, na.rm = T)
+#   wind_max_30d[k, 1] <- max(w, na.rm = T)
+#   #wind_u_30d[k, 1] <- mean(u, na.rm = T)
+#   #wind_v_30d[k, 1] <- mean(v, na.rm = T)
+#   

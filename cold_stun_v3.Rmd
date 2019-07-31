@@ -39,9 +39,23 @@ Look at size measurements - compare with other stranding data.  May be good to s
 
 
 ```{r}
+dat0.1 <- filter(dat0, CCL_cm < 80)
 p3 <- ggplot() + 
-  geom_point(data = dat0,
-             aes(x = CCL_cm, y = Weight_kg, color = Species, size = CCL_cm)) 
+  geom_point(data = dat0.1,
+             aes(x = CCL_cm, y = Weight_kg, 
+                 color = Species),
+             size = 3) +
+   scale_color_manual(breaks = c("CC", "CM", "LV"),
+                       labels = c("Loggerhead", "Green", "Olive ridley"),
+                       values = c("magenta", "green", "blue")) + 
+  labs(x = "Curved carapace length (cm)",
+       y = "Weight (kg)") +
+  theme(legend.position =  "none",
+        text = element_text(size = 12),
+        axis.text = element_text(size =12)) + 
+  xlim(c(20, 80))
+
+p3
 
 if (save.fig)
   ggsave(plot = p3,
@@ -123,15 +137,15 @@ dat_01 <- cbind(dat0.1,
          SST_3_CV = SST_3_SD/SST_3)
 
 p4 <- ggplot(data = dat_01) + 
-  geom_point(aes(x = SST_1_min, 
-                 y = Body_Temp_C),
+  geom_point(aes(y = SST_1_min, 
+                 x = Body_Temp_C),
              size = 3) +
   geom_abline(slope = 1, intercept = 0) +
-  xlim(c(8, 12)) +
-  labs(y = "Body temperature (C)", 
-       x = "Monthly composite SST minimum (3 km x 3 km, C)") 
+  #xlim(c(8, 12)) +
+  labs(x = expression("Body temperature (" *degree*C* ")"),
+       y = expression("Monthly composite SST minimum (3 km x 3 km, " *degree*C* ")")) 
 
-
+p4
 if (save.fig)
   ggsave(plot = p4,
          device = "png",
@@ -147,53 +161,197 @@ There is one that had very high body temperature relative to the ambient SST.
 dat0.1 %>% filter(Body_Temp_C > 20) 
 ```
 
+With coarser resolution (0.0125 degrees) - omit for now. 
+```{r}
+# dat_0125 <- cbind(dat0.1, 
+#                   cold.stun.oce$sst0125.df, 
+#                   cold.stun.oce$sst0125.min.df, 
+#                   cold.stun.oce$sst0125.lag30d.df, 
+#                   cold.stun.oce$sst0125.min.lag30d.df, 
+#                   cold.stun.oce$sst0125.sd.df)
+
+# p4 <- ggplot(data = filter(dat_0125, SST0125_3_min < Inf)) + 
+#   geom_point(aes(x = SST0125_3_min, 
+#                  y = Body_Temp_C), 
+#              size = 3) +
+#   geom_abline(slope = 1, intercept = 0) +
+#   #xlim(c(9, 13)) + 
+#   labs(y = expression("Body temperature (" *degree*C* ")"),
+#        x = expression("Monthly composite SST minimum (3 km x 3 km, " *degree*C* ")")) 
+# 
+# 
+# if (save.fig)
+#   ggsave(plot = p4,
+#          device = "png",
+#          dpi = 600,
+#          filename = "figures/SST0125_3_min_BodyTemp.png")
+# 
+# p4
+```
+
+
+Analyzed data;
 
 ```{r}
-dat_0125 <- cbind(dat0.1, 
-              cold.stun.oce$sst0125.df, 
-              cold.stun.oce$sst0125.min.df, 
-              cold.stun.oce$sst0125.lag30d.df, 
-              cold.stun.oce$sst0125.min.lag30d.df, 
-              cold.stun.oce$sst0125.sd.df)
+dat_analyzed <- cbind(dat0.1, 
+                cold.stun.oce$sst.analyzed.df, 
+                cold.stun.oce$sst.analyzed.min.df, 
+                cold.stun.oce$sst.analyzed.max.df,
+                cold.stun.oce$sst.analyzed.lag30d.df, 
+                cold.stun.oce$sst.analyzed.min.lag30d.df,
+                cold.stun.oce$sst.analyzed.max.lag30d.df,
+                cold.stun.oce$sst.analyzed.sd.df) %>%
+  mutate(SSTanalyzed_1_CV = SSTanalyzed_1_SD/SSTanalyzed_1,
+         SSTanalyzed_2_CV = SSTanalyzed_2_SD/SSTanalyzed_2,
+         SSTanalyzed_3_CV = SSTanalyzed_3_SD/SSTanalyzed_3) %>%
+  filter(Species != "CC")
 
-p4 <- ggplot(data = filter(dat_0125, SST0125_3_min < Inf)) + 
-  geom_point(aes(x = SST0125_3_min, 
-                 y = Body_Temp_C), 
+lm.fit1 <- lm(SSTanalyzed_1_min ~ Body_Temp_C , data = dat_analyzed)
+summary(lm.fit1)
+
+predict.data <- data.frame(Body_Temp_C = seq(from = min(dat_analyzed$Body_Temp_C, na.rm = T),
+                                      to = max(dat_analyzed$Body_Temp_C, na.rm = T),
+                                      by = 0.1))
+lm.fit1.line <- predict(lm.fit1, 
+                        newdata = predict.data)
+
+predict.data$SSTanalyzed_1_min <- lm.fit1.line
+
+p4 <- ggplot(data = dat_analyzed) + 
+  geom_point(aes(y = SSTanalyzed_1_min, 
+                 x = Body_Temp_C,
+                 color = Species),
+             size = 3) +
+  geom_line(data = predict.data,
+            aes(y = SSTanalyzed_1_min, 
+                x = Body_Temp_C)) + 
+   scale_color_manual(breaks = c("CM", "LV"),
+                     labels = c("Green",  "Olive ridley"),
+                     values = c("green", "blue")) +
+  theme(legend.position = c(0.2, 0.8),
+        text = element_text(size = 12),
+        axis.text = element_text(size = 12))+
+  
+  #geom_abline(slope = 1, intercept = 0) +
+  ylim(c(8.5, 20)) +
+  xlim(c(8.5, 25)) +
+  labs(x = expression("Body temperature (" *degree*C* ")"), 
+       y = expression("Analyzed daily SST minimum (6 km x 6 km, " *degree*C* ")")) 
+
+p4
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SSTanalyzed_6x6km_min_BodyTemp.png")
+
+p4
+```
+
+Difference between max and min
+
+```{r}
+dat_analyzed %>%
+  mutate(dif_1 = SSTanalyzed_1_max - SSTanalyzed_1_min,
+         dif_2 = SSTanalyzed_2_max - SSTanalyzed_2_min,
+         dif_3 = SSTanalyzed_3_max - SSTanalyzed_3_min) -> dat_analyzed
+
+lm.fit2 <- lm(dif_1 ~ Body_Temp_C , data = dat_analyzed)
+summary(lm.fit2)
+
+predict.data <- data.frame(Body_Temp_C = seq(from = min(dat_analyzed$Body_Temp_C, na.rm = T),
+                                      to = max(dat_analyzed$Body_Temp_C, na.rm = T),
+                                      by = 0.1))
+lm.fit1.line <- predict(lm.fit1, 
+                        newdata = predict.data)
+
+predict.data$SSTanalyzed_1_min <- lm.fit1.line
+
+p4 <- ggplot(data = dat_analyzed) + 
+  geom_point(aes(y = dif_1, 
+                 x = Body_Temp_C),
+             size = 3) +
+  #geom_abline(slope = 1, intercept = 0) +
+  # ylim(c(8.5, 20)) +
+  # xlim(c(8.5, 25)) +
+  labs(x = expression("Body temperature (" *degree*C* ")"), 
+       y = expression("Analyzed daily SST maximum - minimum (3 km x 3 km, " *degree*C* ")")) 
+
+p4
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SSTanalyzed_1_min_BodyTemp.png")
+
+
+```
+
+
+
+```{r}
+p4 <- ggplot(data = dat_analyzed) + 
+  geom_point(aes(y = SSTanalyzed_1_lag30d, 
+                 x = Body_Temp_C),
              size = 3) +
   geom_abline(slope = 1, intercept = 0) +
-  xlim(c(9, 13))
+  ylim(c(8.5, 20)) +
+  xlim(c(8.5, 25)) +
+  labs(x = expression("Body temperature ( " *degree*C* ")"), 
+       y = expression("Analyzed daily SST minimum 30 dayr prior (3 km x 3 km, " *degree*C* ")")) 
 
+p4
 if (save.fig)
   ggsave(plot = p4,
          device = "png",
          dpi = 600,
-         filename = "figures/SST0125_3_min_BodyTemp.png")
+         filename = "figures/SSTanalyzed_2_min_BodyTemp.png")
 
 p4
 ```
 
-We get smaller sample size because of some missing data points for the minimum SST.  
+```{r}
+p4 <- ggplot(data = dat_analyzed) + 
+  geom_point(aes(y = SSTanalyzed_3_min, 
+                 x = Body_Temp_C),
+             size = 3) +
+  geom_abline(slope = 1, intercept = 0) +
+  ylim(c(8.5, 20)) +
+  xlim(c(8.5, 25)) +
+  labs(y = "Body temperature (C)", 
+       x = "Analyzed daily SST minimum (10 km x 10 km, C)") 
+
+p4
+if (save.fig)
+  ggsave(plot = p4,
+         device = "png",
+         dpi = 600,
+         filename = "figures/SSTanalyzed_3_min_BodyTemp.png")
+
+p4
+```
 
 
 ```{r}
-
-p4 <- ggplot(data = filter(dat_0125, SST0125_1_min < Inf)) + 
-  geom_point(aes(x = SST0125_1_min, 
-                 y = Body_Temp_C),
+p4 <- ggplot(data = dat_analyzed) + 
+  geom_point(aes(y = SSTanalyzed_1_min_lag30, 
+                 x = Body_Temp_C),
              size = 3) +
-  geom_abline(slope = 1, intercept = 0) 
-  #xlim(c(9, 13))
+  geom_abline(slope = 1, intercept = 0) +
+  ylim(c(8.5, 20)) +
+  xlim(c(8.5, 25)) +
+  labs(y = "Body temperature (C)", 
+       x = "Analyzed daily SST minimum 30 days prior (3 km x 3 km, C)") 
 
+p4
 if (save.fig)
   ggsave(plot = p4,
          device = "png",
          dpi = 600,
-         filename = "figures/SST0125_3_min_BodyTemp.png")
+         filename = "figures/SSTanalyzed_2_min_BodyTemp.png")
 
 p4
 ```
-
-Only 5 data points are available for the smaller spatial span... 
 
 
 ```{r}

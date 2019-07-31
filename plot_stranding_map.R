@@ -5,30 +5,46 @@ library(tidyverse)
 
 save.fig <- FALSE #TRUE
 
-dat0 <- read.csv(file = "data/ColdStun_data_June2019.csv", 
+# dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
+#                  header = TRUE)  %>%
+#   rownames_to_column() %>%
+#   #select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
+#   mutate(#Age = as.factor(toupper(Age)),
+#          #Sex = as.factor(toupper(Sex)),
+#          #Condition = as.factor(toupper(Condition)),
+#          ID = rowname,
+#          Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
+#                                     ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
+#          Body_Temp_C = Confirmed.body.temp.C,
+#          Year = Year_Initially_Observed,
+#          Month = Month_Initially_Observed,
+#          Day = Day_Initially_Observed,
+#          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
+#   select(ID, Age, State, Latitude, Longitude, 
+#          Sex, Weight_kg, CCL_cm, CCW_cm,
+#          Body_Temp_C, Date, Species) %>%
+#  filter(Latitude > 34.45)
+
+
+dat0 <- read.csv(file = "data/ColdStun_data_July2019_a.csv", 
                  header = TRUE)  %>%
   rownames_to_column() %>%
-  select(-c(Field_ID, Database_ID, NMFS_ID, Other_ID, Location, City, County, Country)) %>%
-  mutate(Age = as.factor(toupper(Age)),
+  mutate(Weight_kg = Admit_weight_kg,
+         CCL_cm = CCL,
          Sex = as.factor(toupper(Sex)),
-         Condition = as.factor(toupper(Condition)),
          ID = rowname,
-         Species = as.factor(ifelse(Common_Name == "Green sea turtle", "CM",
-                                    ifelse(Common_Name == "Loggerhead", "CC", "LO"))),
-         Body_Temp_C = Confirmed.body.temp.C,
-         Year = Year_Initially_Observed,
-         Month = Month_Initially_Observed,
-         Day = Day_Initially_Observed,
+         Species = Species_Code, 
+         Body_Temp_C = Initial_body_temp_C,
          Date = as.Date(paste(Year, Month, Day, sep = "-"))) %>%
-  select(ID, Age, State, Latitude, Longitude, 
-         Sex, Weight_kg, CCL_cm, CCW_cm,
-         Body_Temp_C, Date, Species) %>%
-  filter(Latitude > 34.45)
+  select(ID, Latitude, Longitude, 
+         Sex, Weight_kg, CCL_cm, 
+         Body_Temp_C, Date, Species,
+         Hypothermic) 
 
 summary(dat0)
 
 water.color <- "lightblue"
-land.color <- "darkgray"
+land.color <- "lightgray"
 border.color <- "gray20"
 
 E.end <- -112
@@ -86,6 +102,8 @@ state_border <- sp::spTransform(rgdal::readOGR(dsn = "~/R/Oceans and Maps/cb_201
 state_border <- raster::crop(state_border, raster::extent(c(W.end, E.end, 30, 50)))
 state_border.df <- broom::tidy(state_border)
 
+dat0 %>% group_by(Species) %>% tally() -> n.Species
+
 p1 <- ggplot() + 
   geom_polygon(data = data.frame(y = c(N.end, S.end, S.end, N.end, N.end),
                                  x = c(W.end, W.end, E.end, E.end, W.end)),
@@ -118,12 +136,20 @@ p1 <- ggplot() +
                  y = Latitude,
                  color = Species),
              size = 2,
-             alpha = 0.5)  +
+             alpha = 0.8)  +
   coord_map() +
   xlim(c(-128, E.end))+
   ylab(expression(paste("Latitude (", degree, "N)"))) +
-  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) 
-    
+  xlab(expression(paste("Longitude (", degree, "W)", sep=""))) +
+  scale_color_manual(breaks = c("CC", "CM", "LV"),
+                     labels = c(paste0("Loggerhead (", filter(n.Species, Species == "CC")[2], ")"),
+                                paste0("Green (", filter(n.Species, Species == "CM")[2], ")"),
+                                paste0("Olive ridley (", filter(n.Species, Species == "LV")[2], ")")),
+                     values = c("magenta", "green", "blue")) +
+  theme(legend.position = c(0.8, 0.7))
+  
+
+p1    
 if (save.fig)
   ggsave(plot = p1,
          device = "png",
