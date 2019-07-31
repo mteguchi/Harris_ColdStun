@@ -51,8 +51,8 @@ p3 <- ggplot() +
   labs(x = "Curved carapace length (cm)",
        y = "Weight (kg)") +
   theme(legend.position =  "none",
-        text = element_text(size = 12),
-        axis.text = element_text(size =12)) + 
+        text = element_text(size = 14),
+        axis.text = element_text(size =13)) + 
   xlim(c(20, 80))
 
 p3
@@ -61,7 +61,7 @@ if (save.fig)
   ggsave(plot = p3,
          device = "png",
          dpi = 600,
-         filename = "figures/CCL_Mass_CCW.png")
+         filename = "figures/CCL_Mass.png")
 p3
 ```
 
@@ -143,7 +143,7 @@ p4 <- ggplot(data = dat_01) +
   geom_abline(slope = 1, intercept = 0) +
   #xlim(c(8, 12)) +
   labs(x = expression("Body temperature (" *degree*C* ")"),
-       y = expression("Monthly composite SST minimum (3 km x 3 km, " *degree*C* ")")) 
+       y = expression("Monthly composite SST minimum (6 km x 6 km, " *degree*C* ")")) 
 
 p4
 if (save.fig)
@@ -229,12 +229,12 @@ p4 <- ggplot(data = dat_analyzed) +
                      labels = c("Green",  "Olive ridley"),
                      values = c("green", "blue")) +
   theme(legend.position = c(0.2, 0.8),
-        text = element_text(size = 12),
-        axis.text = element_text(size = 12))+
+        text = element_text(size = 15),
+        axis.text = element_text(size = 13))+
   
   #geom_abline(slope = 1, intercept = 0) +
-  ylim(c(8.5, 20)) +
-  xlim(c(8.5, 25)) +
+  ylim(c(6, 25)) +
+  xlim(c(6, 25)) +
   labs(x = expression("Body temperature (" *degree*C* ")"), 
        y = expression("Analyzed daily SST minimum (6 km x 6 km, " *degree*C* ")")) 
 
