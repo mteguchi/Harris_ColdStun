@@ -134,7 +134,8 @@ dat_01 <- cbind(dat0.1,
                 cold.stun.oce$sst01.anom.lag30d.df) %>%
   mutate(SST_1_CV = SST_1_SD/SST_1,
          SST_2_CV = SST_2_SD/SST_2,
-         SST_3_CV = SST_3_SD/SST_3)
+         SST_3_CV = SST_3_SD/SST_3) %>%
+  filter(ID != 38)
 
 p4 <- ggplot(data = dat_01) + 
   geom_point(aes(y = SST_1_min, 
@@ -204,7 +205,8 @@ dat_analyzed <- cbind(dat0.1,
   mutate(SSTanalyzed_1_CV = SSTanalyzed_1_SD/SSTanalyzed_1,
          SSTanalyzed_2_CV = SSTanalyzed_2_SD/SSTanalyzed_2,
          SSTanalyzed_3_CV = SSTanalyzed_3_SD/SSTanalyzed_3) %>%
-  filter(Species != "CC")
+  filter(Species != "CC") %>%
+  filter(ID != 38)
 
 lm.fit1 <- lm(SSTanalyzed_1_min ~ Body_Temp_C , data = dat_analyzed)
 summary(lm.fit1)
